@@ -44,9 +44,9 @@ void Model::updateDefaultVersion() {
     }
     defaultVersion = newDefaultVersion;
     if (newDefaultVersion) {
-        SPDLOG_INFO("Updated default version for model:{}, to:{}", getName(), newDefaultVersion);
+        spdlog::info("Updated default version for model:{}, to:{}", getName(), newDefaultVersion);
     } else {
-        SPDLOG_INFO("Model:{} will not have default version since no version is available.", getName());
+        spdlog::info("Model:{} will not have default version since no version is available.", getName());
     }
 }
 
@@ -56,14 +56,14 @@ const std::shared_ptr<ModelInstance> Model::getDefaultModelInstance() const {
     const auto modelInstanceIt = modelVersions.find(defaultVersion);
 
     if (modelVersions.end() == modelInstanceIt) {
-        SPDLOG_WARN("Default version:{} for model:{} not found", defaultVersion, getName());
+        spdlog::warn("Default version:{} for model:{} not found", defaultVersion, getName());
         return nullptr;
     }
     return modelInstanceIt->second;
 }
 
 std::shared_ptr<ovms::ModelInstance> Model::modelInstanceFactory() {
-    SPDLOG_DEBUG("Producing new ModelInstance");
+    spdlog::debug("Producing new ModelInstance");
     return std::move(std::make_shared<ModelInstance>());
 }
 

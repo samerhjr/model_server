@@ -96,7 +96,7 @@ Status HttpRestApiHandler::dispatchToProcessor(
             return processPredictRequest(request_components.model_name, request_components.model_version,
                 request_components.model_version_label, request_body, response);
         } else {
-            spdlog::error("Requested REST resource {} not found", std::string(request_path));
+            spdlog::warn("Requested REST resource {} not found", std::string(request_path));
             return StatusCode::REST_NOT_FOUND;
         }
     } else if (request_components.http_method == "GET") {
@@ -171,13 +171,13 @@ Status HttpRestApiHandler::processPredictRequest(
     Status status;
 
     if (modelManager.modelExists(modelName)) {
-        SPDLOG_INFO("Found model with name: {}. Searching for requested version...", modelName);
+        spdlog::debug("Found model with name: {}. Searching for requested version...", modelName);
         status = processSingleModelRequest(modelName, modelVersion, request, requestOrder, responseProto);
     } else if (modelManager.pipelineDefinitionExists(modelName)) {
-        SPDLOG_INFO("Found pipeline with name: {}", modelName);
+        spdlog::debug("Found pipeline with name: {}", modelName);
         status = processPipelineRequest(modelName, request, requestOrder, responseProto);
     } else {
-        SPDLOG_INFO("Model or pipeline matching request parameters not found - name: {}, version: {}", modelName, modelVersion.value_or(0));
+        spdlog::warn("Model or pipeline matching request parameters not found - name: {}, version: {}", modelName, modelVersion.value_or(0));
         status = StatusCode::MODEL_NAME_MISSING;
     }
     if (!status.ok())
@@ -208,7 +208,7 @@ Status HttpRestApiHandler::processSingleModelRequest(const std::string& modelNam
         modelInstanceUnloadGuard);
 
     if (!status.ok()) {
-        SPDLOG_INFO("Requested model instance - name: {}, version: {} - does not exist.", modelName, modelVersion.value_or(0));
+        spdlog::warn("Requested model instance - name: {}, version: {} - does not exist.", modelName, modelVersion.value_or(0));
         return status;
     }
     Timer timer;

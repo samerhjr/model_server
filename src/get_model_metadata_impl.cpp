@@ -36,24 +36,24 @@ Status GetModelMetadataImpl::getModelStatus(
 
     auto model = manager.findModelByName(name);
     if (model == nullptr) {
-        SPDLOG_INFO("model {} is  missing", name);
+        spdlog::warn("model {} is  missing", name);
         return StatusCode::MODEL_NAME_MISSING;
     }
 
     std::shared_ptr<ModelInstance> instance = nullptr;
     if (request->model_spec().has_version() && request->model_spec().version().value() != 0) {
         ovms::model_version_t version = request->model_spec().version().value();
-        SPDLOG_DEBUG("requested: name {}; version {}", name, version);
+        spdlog::debug("requested: name {}; version {}", name, version);
         instance = model->getModelInstanceByVersion(version);
         if (instance == nullptr) {
-            SPDLOG_INFO("model {}; version {} is missing", name, version);
+            spdlog::warn("model {}; version {} is missing", name, version);
             return StatusCode::MODEL_VERSION_MISSING;
         }
     } else {
-        SPDLOG_DEBUG("requested: name {}; default version", name);
+        spdlog::debug("requested: name {}; default version", name);
         instance = model->getDefaultModelInstance();
         if (instance == nullptr) {
-            SPDLOG_INFO("model {}; default version is missing", name);
+            spdlog::warn("model {}; default version is missing", name);
             return StatusCode::MODEL_VERSION_MISSING;
         }
     }

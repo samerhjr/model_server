@@ -38,7 +38,7 @@ using google::protobuf::util::MessageToJsonString;
 namespace ovms {
 
 void addStatusToResponse(tensorflow::serving::GetModelStatusResponse* response, model_version_t version, const ModelVersionStatus& model_version_status) {
-    SPDLOG_DEBUG("add_status_to_response version={} status={}", version, model_version_status.getStateString());
+    spdlog::debug("add_status_to_response version={} status={}", version, model_version_status.getStateString());
     auto status_to_fill = response->add_model_version_status();
     status_to_fill->set_state(static_cast<tensorflow::serving::ModelVersionStatus_State>(static_cast<int>(model_version_status.getState())));
     status_to_fill->set_version(version);
@@ -74,39 +74,39 @@ Status GetModelStatusImpl::serializeResponse2Json(const tensorflow::serving::Get
 }
 
 Status GetModelStatusImpl::getModelStatus(const tensorflow::serving::GetModelStatusRequest* request, tensorflow::serving::GetModelStatusResponse* response) {
-    SPDLOG_DEBUG("model_service: request: {}", request->DebugString());
+    spdlog::debug("model_service: request: {}", request->DebugString());
 
     bool has_requested_version = request->model_spec().has_version();
     auto requested_version = request->model_spec().version().value();
     std::string requested_model_name = request->model_spec().name();
     auto model_ptr = ModelManager::getInstance().findModelByName(requested_model_name);
     if (!model_ptr) {
-        SPDLOG_INFO("requested model {} was not found", requested_model_name);
+        spdlog::warn("requested model {} was not found", requested_model_name);
         return StatusCode::MODEL_NAME_MISSING;
     }
 
-    SPDLOG_DEBUG("requested model: {}, has_version: {} (version: {})", requested_model_name, has_requested_version, requested_version);
+    spdlog::debug("requested model: {}, has_version: {} (version: {})", requested_model_name, has_requested_version, requested_version);
     if (has_requested_version && requested_version != 0) {
         // return details only for a specific version of requested model; NOT_FOUND otherwise. If requested_version == 0, default is returned.
         std::shared_ptr<ModelInstance> model_instance = model_ptr->getModelInstanceByVersion(requested_version);
         if (!model_instance) {
-            SPDLOG_INFO("requested model {} in version {} was not found.", requested_model_name, requested_version);
+            spdlog::warn("requested model {} in version {} was not found.", requested_model_name, requested_version);
             return StatusCode::MODEL_VERSION_MISSING;
         }
         const auto& status = model_instance->getStatus();
-        SPDLOG_DEBUG("adding model {} - {} :: {} to response", requested_model_name, requested_version, status.getStateString());
+        spdlog::debug("adding model {} - {} :: {} to response", requested_model_name, requested_version, status.getStateString());
         addStatusToResponse(response, requested_version, status);
     } else {
         // return status details of all versions of a requested model.
         auto modelVersionsInstances = model_ptr->getModelVersionsMapCopy();
         for (const auto& [modelVersion, modelInstance] : modelVersionsInstances) {
             const auto& status = modelInstance.getStatus();
-            SPDLOG_DEBUG("adding model {} - {} :: {} to response", requested_model_name, modelVersion, status.getStateString());
+            spdlog::debug("adding model {} - {} :: {} to response", requested_model_name, modelVersion, status.getStateString());
             addStatusToResponse(response, modelVersion, status);
         }
     }
-    SPDLOG_DEBUG("model_service: response: {}", response->DebugString());
-    SPDLOG_DEBUG("MODEL_STATUS created a response for {} - {}", requested_model_name, requested_version);
+    spdlog::debug("model_service: response: {}", response->DebugString());
+    spdlog::debug("MODEL_STATUS created a response for {} - {}", requested_model_name, requested_version);
     return StatusCode::OK;
 }
 

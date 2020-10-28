@@ -216,7 +216,7 @@ std::vector<std::unique_ptr<Server>> startGRPCServer(
         } catch (std::invalid_argument const& e) {
             builder.AddChannelArgument(channel_argument.key, channel_argument.value);
         } catch (std::out_of_range const& e) {
-            spdlog::error("Out of range parameter {} : {}", channel_argument.key, channel_argument.value);
+            spdlog::warn("Out of range parameter {} : {}", channel_argument.key, channel_argument.value);
         }
     }
 
@@ -292,10 +292,10 @@ int server_main(int argc, char** argv) {
 
         ModelManager::getInstance().join();
     } catch (std::exception& e) {
-        SPDLOG_ERROR("Exception catch: {} - will now terminate.", e.what());
+        spdlog::error("Exception catch: {} - will now terminate.", e.what());
         return EXIT_FAILURE;
     } catch (...) {
-        SPDLOG_ERROR("Unknown exception catch - will now terminate.");
+        spdlog::error("Unknown exception catch - will now terminate.");
         return EXIT_FAILURE;
     }
 

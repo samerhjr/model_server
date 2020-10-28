@@ -30,7 +30,6 @@ namespace ovms {
 namespace fs = std::filesystem;
 
 using files_list_t = std::set<std::string>;
-
 class FileSystem {
 public:
     /**
@@ -182,8 +181,7 @@ public:
         int status =
             mkdir(const_cast<char*>(path.c_str()), S_IRUSR | S_IWUSR | S_IXUSR);
         if (status == -1) {
-            SPDLOG_ERROR("Failed to create local folder: {} {} ", path,
-                strerror(errno));
+            spdlog::error("Failed to create local folder: {} {} ", path, strerror(errno));
             return StatusCode::PATH_INVALID;
         }
         return StatusCode::OK;

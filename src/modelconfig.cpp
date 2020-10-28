@@ -100,7 +100,7 @@ std::tuple<Mode, size_t> ModelConfig::extractBatchingParams(std::string configBa
         try {
             effectiveBatchSize = std::stoi(configBatchSize);
         } catch (const std::invalid_argument& e) {
-            SPDLOG_ERROR("Wrong batch size parameter provided. Model batch size will be set to default.");
+            spdlog::warn("Wrong batch size parameter provided. Model batch size will be set to default.");
         }
     }
     return std::tuple<Mode, size_t>{batchingMode, effectiveBatchSize};
@@ -265,7 +265,7 @@ Status ModelConfig::parseShape(ShapeInfo& shapeInfo, const std::string& str) {
 }
 
 Status ModelConfig::parseModelMapping() {
-    SPDLOG_DEBUG("Parsing model:{} mapping from path:{}", getName(), getPath());
+    spdlog::debug("Parsing model:{} mapping from path:{}", getName(), getPath());
     mappingInputs.clear();
     mappingOutputs.clear();
     std::filesystem::path path = this->getPath();
@@ -279,28 +279,28 @@ Status ModelConfig::parseModelMapping() {
     rapidjson::Document doc;
     rapidjson::IStreamWrapper isw(ifs);
     if (doc.ParseStream(isw).HasParseError()) {
-        SPDLOG_ERROR("Configuration file is not a valid JSON file.");
+        spdlog::error("Configuration file is not a valid JSON file.");
         return StatusCode::JSON_INVALID;
     }
 
     if (validateJsonAgainstSchema(doc, MODELS_MAPPING_INPUTS_SCHEMA) != StatusCode::OK) {
-        SPDLOG_WARN("Couldn't load inputs object from file {}", path.c_str());
+        spdlog::warn("Couldn't load inputs object from file {}", path.c_str());
     } else {
         // Process inputs
         const auto itr = doc.FindMember("inputs");
         for (const auto& key : itr->value.GetObject()) {
-            SPDLOG_DEBUG("Loaded input mapping {} => {}", key.name.GetString(), key.value.GetString());
+            spdlog::debug("Loaded input mapping {} => {}", key.name.GetString(), key.value.GetString());
             mappingInputs[key.name.GetString()] = key.value.GetString();
         }
     }
 
     if (validateJsonAgainstSchema(doc, MODELS_MAPPING_OUTPUTS_SCHEMA) != StatusCode::OK) {
-        SPDLOG_WARN("Couldn't load outputs object from file {}", path.c_str());
+        spdlog::warn("Couldn't load outputs object from file {}", path.c_str());
     } else {
         // Process outputs
         const auto it = doc.FindMember("outputs");
         for (const auto& key : it->value.GetObject()) {
-            SPDLOG_DEBUG("Loaded output mapping {} => {}", key.name.GetString(), key.value.GetString());
+            spdlog::debug("Loaded output mapping {} => {}", key.name.GetString(), key.value.GetString());
             mappingOutputs[key.name.GetString()] = key.value.GetString();
         }
     }
@@ -333,7 +333,7 @@ Status ModelConfig::parseNode(const rapidjson::Value& v) {
         if (v["shape"].IsString()) {
             ShapeInfo shapeInfo;
             if (!parseShape(shapeInfo, v["shape"].GetString()).ok()) {
-                SPDLOG_ERROR("There was an error parsing shape {}", v["shape"].GetString());
+                spdlog::warn("There was an error parsing shape {}", v["shape"].GetString());
             }
             this->addShape(ANONYMOUS_INPUT_NAME, shapeInfo);
         } else {
@@ -351,7 +351,7 @@ Status ModelConfig::parseNode(const rapidjson::Value& v) {
                     // check if legacy format is used
                     if (s.value.IsString()) {
                         if (!ModelConfig::parseShape(shapeInfo, s.value.GetString()).ok()) {
-                            SPDLOG_ERROR("There was an error parsing shape {}", v["shape"].GetString());
+                            spdlog::warn("There was an error parsing shape {}", v["shape"].GetString());
                         }
                     } else {
                         for (auto& sh : s.value.GetArray()) {
@@ -376,7 +376,7 @@ Status ModelConfig::parseNode(const rapidjson::Value& v) {
 
     if (v.HasMember("plugin_config")) {
         if (!parsePluginConfig(v["plugin_config"]).ok()) {
-            SPDLOG_ERROR("Couldn't parse plugin config");
+            spdlog::warn("Couldn't parse plugin config");
         }
     }
 
@@ -387,7 +387,7 @@ Status ModelConfig::parseNode(const rapidjson::Value& v) {
         v["model_version_policy"].Accept(writer);
         const auto& status = parseModelVersionPolicy(buffer.GetString());
         if (!status.ok()) {
-            SPDLOG_ERROR("Couldn't parse model version policy. {}", status.string());
+            spdlog::warn("Couldn't parse model version policy. {}", status.string());
         }
     } else {
         modelVersionPolicy = ModelVersionPolicy::getDefaultVersionPolicy();

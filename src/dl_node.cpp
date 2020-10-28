@@ -41,7 +41,7 @@ Status DLNode::execute(ThreadSafeQueue<std::reference_wrapper<Node>>& notifyEndQ
     }
     auto streamId = this->nodeStreamIdGuard->tryGetId(WAIT_FOR_STREAM_ID_TIMEOUT_MICROSECONDS);
     if (!streamId) {
-        SPDLOG_DEBUG("[Node: {}] Could not acquire stream Id right away", getName());
+        spdlog::debug("[Node: {}] Could not acquire stream Id right away", getName());
         return StatusCode::PIPELINE_STREAM_ID_NOT_READY_YET;
     }
     auto& inferRequestsQueue = this->model->getInferRequestsQueue();
@@ -89,7 +89,7 @@ Status DLNode::setInputsForInference(InferenceEngine::InferRequest& infer_reques
         for (const auto& kv : this->inputBlobs) {
             std::string realModelInputName;
             if (!getRealInputName(kv.first, &realModelInputName).ok()) {
-                SPDLOG_ERROR("DLNode::fetchResults (Node name {}); cannot find real model input name for alias: {}", getName(), kv.first);
+                spdlog::warn("DLNode::fetchResults (Node name {}); cannot find real model input name for alias: {}", getName(), kv.first);
                 return StatusCode::INTERNAL_ERROR;
             }
             infer_request.SetBlob(realModelInputName, kv.second);
@@ -112,15 +112,15 @@ Status DLNode::setInputsForInference(InferenceEngine::InferRequest& infer_reques
 
 Status DLNode::executeInference(ThreadSafeQueue<std::reference_wrapper<Node>>& notifyEndQueue, InferenceEngine::InferRequest& infer_request) {
     try {
-        SPDLOG_DEBUG("Setting completion callback for node name: {}", this->getName());
+        spdlog::debug("Setting completion callback for node name: {}", this->getName());
         infer_request.SetCompletionCallback([this, &notifyEndQueue, &infer_request]() {
-            SPDLOG_DEBUG("Completion callback received for node name: {}", this->getName());
+            spdlog::debug("Completion callback received for node name: {}", this->getName());
             // After inference is completed, input blobs are not needed anymore
             this->inputBlobs.clear();
             notifyEndQueue.push(*this);
             infer_request.SetCompletionCallback([]() {});  // reset callback on infer request
         });
-        SPDLOG_DEBUG("Starting infer async for node name: {}", getName());
+        spdlog::debug("Starting infer async for node name: {}", getName());
         infer_request.StartAsync();
     } catch (const InferenceEngine::details::InferenceEngineException& e) {
         spdlog::debug("[Node: {}] Exception occured when starting async inference or setting completion callback on model: {}, error: {}",
@@ -174,23 +174,23 @@ Status DLNode::fetchResults(BlobMap& outputs) {
             try {
                 std::string realModelOutputName;
                 if (!getRealOutputName(output_name, &realModelOutputName).ok()) {
-                    SPDLOG_ERROR("[Node: {}] Cannot find real model output name for alias: {}", getName(), output_name);
+                    spdlog::warn("[Node: {}] Cannot find real model output name for alias: {}", getName(), output_name);
                     return StatusCode::INTERNAL_ERROR;
                 }
-                SPDLOG_DEBUG("[Node: {}] Getting blob from model:{}, inferRequestStreamId:{}, blobName:{}",
+                spdlog::debug("[Node: {}] Getting blob from model:{}, inferRequestStreamId:{}, blobName:{}",
                     getName(), modelName, streamId.value(), realModelOutputName);
                 const auto blob = infer_request.GetBlob(realModelOutputName);
-                SPDLOG_DEBUG("[Node: {}] Creating copy of blob from model:{}, inferRequestStreamId:{}, blobName:{}",
+                spdlog::debug("[Node: {}] Creating copy of blob from model:{}, inferRequestStreamId:{}, blobName:{}",
                     getName(), modelName, streamId.value(), realModelOutputName);
                 const auto copiedBlob = blobClone(blob);
                 if (copiedBlob == nullptr) {
-                    SPDLOG_ERROR("[Node: {}] Cannot copy blob - buffer sizes mismatch", getName());
+                    spdlog::error("[Node: {}] Cannot copy blob - buffer sizes mismatch", getName());
                     return StatusCode::INTERNAL_ERROR;
                 }
                 outputs.emplace(std::make_pair(output_name, std::move(copiedBlob)));
             } catch (const InferenceEngine::details::InferenceEngineException& e) {
                 Status status = StatusCode::OV_INTERNAL_SERIALIZATION_ERROR;
-                SPDLOG_DEBUG("[Node: {}] Error during getting blob {}; exception message: {}", getName(), status.string(), e.what());
+                spdlog::debug("[Node: {}] Error during getting blob {}; exception message: {}", getName(), status.string(), e.what());
                 return status;
             }
             spdlog::debug("[Node: {}]: Blob with name {} has been prepared", getName(), output_name);

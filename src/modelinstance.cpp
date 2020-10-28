@@ -46,7 +46,7 @@ const uint UNLOAD_AVAILABILITY_CHECKING_INTERVAL_MILLISECONDS = 10;
 Status ModelInstance::loadInputTensors(const ModelConfig& config, const DynamicModelParameter& parameter) {
     if (config.isShapeAnonymousFixed() && network->getInputsInfo().size() > 1) {
         Status status = StatusCode::ANONYMOUS_FIXED_SHAPE_NOT_ALLOWED;
-        spdlog::error(status.string());
+        spdlog::warn(status.string());
         return status;
     }
 
@@ -59,7 +59,7 @@ Status ModelInstance::loadInputTensors(const ModelConfig& config, const DynamicM
             continue;
         }
         if (networkInputs.count(shape.first) == 0) {
-            spdlog::error("Config shape - {} not found in network", shape.first);
+            spdlog::warn("Config shape - {} not found in network", shape.first);
             return StatusCode::CONFIG_SHAPE_IS_NOT_IN_NETWORK;
         }
     }
@@ -105,7 +105,7 @@ Status ModelInstance::loadInputTensors(const ModelConfig& config, const DynamicM
         this->inputsInfo[tensor->getMappedName()] = std::move(tensor);
         std::stringstream shape_stream;
         std::copy(shape.begin(), shape.end(), std::ostream_iterator<size_t>(shape_stream, " "));
-        spdlog::info("Input name: {}; mapping_name: {}; shape: {}; precision: {}, layout:{}",
+        spdlog::debug("Input name: {}; mapping_name: {}; shape: {}; precision: {}, layout:{}",
             name, mappingName, shape_stream.str(), precision_str, TensorInfo::getStringFromLayout(input->getLayout()));
     }
 
@@ -115,7 +115,7 @@ Status ModelInstance::loadInputTensors(const ModelConfig& config, const DynamicM
         try {
             network->reshape(networkShapes);
         } catch (const InferenceEngine::details::InferenceEngineException& e) {
-            spdlog::error("OV does not support reshaping model: {} with provided shape", getName());
+            spdlog::warn("OV does not support reshaping model: {} with provided shape", getName());
             spdlog::debug("Description: {}", e.what());
             return StatusCode::RESHAPE_ERROR;
         }
@@ -141,7 +141,7 @@ void ModelInstance::loadOutputTensors(const ModelConfig& config) {
         this->outputsInfo[tensor->getMappedName()] = std::move(tensor);
         std::stringstream shape_stream;
         std::copy(shape.begin(), shape.end(), std::ostream_iterator<size_t>(shape_stream, " "));
-        spdlog::info("Output name: {} ; mapping name: {}; shape: {} ; precision: {}, layout:{}",
+        spdlog::debug("Output name: {} ; mapping name: {}; shape: {} ; precision: {}, layout:{}",
             name, mappingName, shape_stream.str(), precision_str, TensorInfo::getStringFromLayout(output->getLayout()));
     }
 }
@@ -161,7 +161,7 @@ std::string findFilePathWithExtension(const std::string& path, const std::string
     struct dirent* entry;
     DIR* dir = opendir(path.c_str());
     if (!dir) {
-        SPDLOG_WARN("Failed to opendir: {}", path);
+        spdlog::warn("Failed to opendir: {}", path);
         return std::string();
     }
 
@@ -199,7 +199,7 @@ uint ModelInstance::getNumOfParallelInferRequestsUnbounded(const ModelConfig& mo
     try {
         numberOfParallelInferRequests = execNetwork->GetMetric(key).as<unsigned int>();
     } catch (const details::InferenceEngineException& ex) {
-        spdlog::info("Failed to query OPTIMAL_NUMBER_OF_INFER_REQUESTS with error {}. Using 1 nireq.", ex.what());
+        spdlog::warn("Failed to query OPTIMAL_NUMBER_OF_INFER_REQUESTS with error {}. Using 1 nireq.", ex.what());
         numberOfParallelInferRequests = 1u;
     }
     return numberOfParallelInferRequests;
@@ -208,10 +208,10 @@ uint ModelInstance::getNumOfParallelInferRequestsUnbounded(const ModelConfig& mo
 uint ModelInstance::getNumOfParallelInferRequests(const ModelConfig& modelConfig) {
     uint nireq = getNumOfParallelInferRequestsUnbounded(modelConfig);
     if (nireq > MAX_NIREQ_COUNT) {
-        SPDLOG_ERROR("Invalid nireq because its value was too high:{}. Maximum value:{}", nireq, MAX_NIREQ_COUNT);
+        spdlog::warn("Invalid nireq because its value was too high:{}. Maximum value:{}", nireq, MAX_NIREQ_COUNT);
         return 0;
     } else if (nireq < 1u) {
-        SPDLOG_WARN("Ignored configured nireq because it has to be above 0 and was:{}. Set to 1", nireq);
+        spdlog::warn("Ignored configured nireq because it has to be above 0 and was:{}. Set to 1", nireq);
         return 1u;
     }
     return nireq;
@@ -425,7 +425,7 @@ Status ModelInstance::reloadModel(const ModelConfig& config, const DynamicModelP
     std::lock_guard<std::recursive_mutex> loadingLock(loadingMutex);
     this->status.setLoading();
     while (!canUnloadInstance()) {
-        SPDLOG_INFO("Waiting to reload model: {} version: {}. Blocked by: {} inferences in progress.",
+        spdlog::info("Waiting to reload model: {} version: {}. Blocked by: {} inferences in progress.",
             getName(), getVersion(), predictRequestsHandlesCount);
         std::this_thread::sleep_for(std::chrono::milliseconds(UNLOAD_AVAILABILITY_CHECKING_INTERVAL_MILLISECONDS));
     }
@@ -440,11 +440,11 @@ Status ModelInstance::recoverFromReloadingError(const Status& status) {
         }
         return status;
     }
-    spdlog::info("Failed to reload model:{} version:{} with error:{}. Reloading to previous configuration",
+    spdlog::warn("Failed to reload model:{} version:{} with error:{}. Reloading to previous configuration",
         getName(), getVersion(), status.string());
     auto recoveryStatus = reloadModel(config);
     if (!recoveryStatus.ok()) {
-        spdlog::info("Failed to reload model:{} version:{} to previous configuration with error:{}",
+        spdlog::warn("Failed to reload model:{} version:{} to previous configuration with error:{}",
             getName(), getVersion(), recoveryStatus.string());
     }
     return status;
@@ -483,17 +483,17 @@ Status ModelInstance::waitForLoaded(const uint waitForModelLoadedTimeoutMillisec
     // assumption: model is already loaded for most of the calls
     modelInstanceUnloadGuard = std::make_unique<ModelInstanceUnloadGuard>(*this);
     if (getStatus().getState() == ModelVersionState::AVAILABLE) {
-        SPDLOG_DEBUG("Model:{}, version:{} already loaded", getName(), getVersion());
+        spdlog::debug("Model:{}, version:{} already loaded", getName(), getVersion());
         return StatusCode::OK;
     }
-    SPDLOG_INFO("Model:{} version:{} is still loading", getName(), getVersion());
+    spdlog::info("Model:{} version:{} is still loading", getName(), getVersion());
     modelInstanceUnloadGuard.reset();
 
     // wait several time since no guarantee that cv wakeup will be triggered before calling wait_for
     const uint waitLoadedTimestepMilliseconds = 100;
     const uint waitCheckpoints = waitForModelLoadedTimeoutMilliseconds / waitLoadedTimestepMilliseconds;
     uint waitCheckpointsCounter = waitCheckpoints;
-    SPDLOG_INFO("Waiting for loaded state for model:{} version:{} with timestep:{} timeout:{} check count:{}", getName(), getVersion(),
+    spdlog::info("Waiting for loaded state for model:{} version:{} with timestep:{} timeout:{} check count:{}", getName(), getVersion(),
         waitLoadedTimestepMilliseconds, waitForModelLoadedTimeoutMilliseconds, waitCheckpointsCounter);
     std::mutex cv_mtx;
     std::unique_lock<std::mutex> cv_lock(cv_mtx);
@@ -503,27 +503,27 @@ Status ModelInstance::waitForLoaded(const uint waitForModelLoadedTimeoutMillisec
                 [this]() {
                     return this->getStatus().getState() > ModelVersionState::LOADING;
                 })) {
-            SPDLOG_INFO("Waiting for model:{} version:{} loaded state for:{} time",
+            spdlog::info("Waiting for model:{} version:{} loaded state for:{} time",
                 getName(), getVersion(), waitCheckpoints - waitCheckpointsCounter);
         }
         modelInstanceUnloadGuard = std::make_unique<ModelInstanceUnloadGuard>(*this);
         if (getStatus().getState() == ModelVersionState::AVAILABLE) {
-            SPDLOG_INFO("Succesfully waited for model:{}, version:{}", getName(), getVersion());
+            spdlog::info("Succesfully waited for model:{}, version:{}", getName(), getVersion());
             return StatusCode::OK;
         }
         modelInstanceUnloadGuard.reset();
         if (ModelVersionState::AVAILABLE < getStatus().getState()) {
-            SPDLOG_INFO("Stopped waiting for model:{} version:{} since it is unloading.", getName(), getVersion());
+            spdlog::info("Stopped waiting for model:{} version:{} since it is unloading.", getName(), getVersion());
             return StatusCode::MODEL_VERSION_NOT_LOADED_ANYMORE;
         }
     }
-    SPDLOG_INFO("Waiting for loaded state reached timeout for model:{} version:{}",
+    spdlog::info("Waiting for loaded state reached timeout for model:{} version:{}",
         getName(), getVersion());
     if (getStatus().getState() > ModelVersionState::AVAILABLE) {
-        SPDLOG_ERROR("Waiting for model:{}, version:{} ended since it started unloading.", getName(), getVersion());
+        spdlog::warn("Waiting for model:{}, version:{} ended since it started unloading.", getName(), getVersion());
         return StatusCode::MODEL_VERSION_NOT_LOADED_ANYMORE;
     } else {
-        SPDLOG_ERROR("Waiting for model:{}, version:{} ended due to timeout.", getName(), getVersion());
+        spdlog::warn("Waiting for model:{}, version:{} ended due to timeout.", getName(), getVersion());
         return StatusCode::MODEL_VERSION_NOT_LOADED_YET;
     }
 }
@@ -532,7 +532,7 @@ void ModelInstance::unloadModel() {
     std::lock_guard<std::recursive_mutex> loadingLock(loadingMutex);
     this->status.setUnloading();
     while (!canUnloadInstance()) {
-        SPDLOG_INFO("Waiting to unload model:{} version:{}. Blocked by:{} inferences in progres.",
+        spdlog::info("Waiting to unload model:{} version:{}. Blocked by:{} inferences in progres.",
             getName(), getVersion(), predictRequestsHandlesCount);
         std::this_thread::sleep_for(std::chrono::milliseconds(UNLOAD_AVAILABILITY_CHECKING_INTERVAL_MILLISECONDS));
     }

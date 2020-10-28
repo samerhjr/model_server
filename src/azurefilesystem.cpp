@@ -40,7 +40,7 @@ as::cloud_storage_account createDefaultOrAnonymousAccount() {
 
         as::cloud_storage_account storage_account = as::cloud_storage_account::parse(credentials);
         if (!storage_account.is_initialized()) {
-            SPDLOG_ERROR("Unable to create default azure storage account");
+            spdlog::error("Unable to create default azure storage account");
             throw std::runtime_error("Unable to create default azure storage account");
         }
 
@@ -56,26 +56,29 @@ as::cloud_storage_account createDefaultOrAnonymousAccount() {
         }
 
         if (!proxy_env) {
-            SPDLOG_DEBUG("No proxy detected.");
+            spdlog::debug("No proxy detected.");
         } else {
             https_proxy = std::string(proxy_env);
             web::web_proxy wproxy(https_proxy);
             as::operation_context::set_default_proxy(wproxy);
 
-            SPDLOG_DEBUG("Proxy detected: {}" + https_proxy);
+            spdlog::debug("Proxy detected: {}" + https_proxy);
         }
 
         return storage_account;
     } catch (const as::storage_exception& e) {
-        SPDLOG_ERROR("Unable to create default azure storage account: {}", e.what());
         as::request_result result = e.result();
         as::storage_extended_error extended_error = result.extended_error();
         if (!extended_error.message().empty()) {
-            SPDLOG_ERROR("Unable to create default azure storage account: {}", extended_error.message());
+            spdlog::warn("Unable to create default azure storage account: {}", extended_error.message());
+        }
+        else
+        {
+            spdlog::warn("Unable to create default azure storage account: {}", e.what());
         }
         throw e;
     } catch (const std::exception& e) {
-        SPDLOG_ERROR("Unable to create default azure storage account: {}", e.what());
+        spdlog::warn("Unable to create default azure storage account: {}", e.what());
         throw e;
     }
 }
@@ -94,7 +97,7 @@ StatusCode AzureFileSystem::fileExists(const std::string& path, bool* exists) {
     auto azureStorageObj = factory.get()->getNewAzureStorageObject(path, account_);
     auto status = azureStorageObj->checkPath(path);
     if (status != StatusCode::OK) {
-        SPDLOG_WARN("AS: Check path failed: {} -> {}", path,
+        spdlog::warn("AS: Check path failed: {} -> {}", path,
             ovms::Status(status).string());
         return status;
     }
@@ -112,7 +115,7 @@ StatusCode AzureFileSystem::isDirectory(const std::string& path,
     auto azureStorageObj = factory.get()->getNewAzureStorageObject(path, account_);
     auto status = azureStorageObj->checkPath(path);
     if (status != StatusCode::OK) {
-        SPDLOG_WARN("AS: Check path failed: {} -> {}", path,
+        spdlog::warn("AS: Check path failed: {} -> {}", path,
             ovms::Status(status).string());
         return status;
     }
@@ -129,7 +132,7 @@ StatusCode AzureFileSystem::fileModificationTime(const std::string& path,
     auto azureStorageObj = factory.get()->getNewAzureStorageObject(path, account_);
     auto status = azureStorageObj->checkPath(path);
     if (status != StatusCode::OK) {
-        SPDLOG_WARN("AS: Check path failed: {} -> {}", path,
+        spdlog::warn("AS: Check path failed: {} -> {}", path,
             ovms::Status(status).string());
         return status;
     }
@@ -147,7 +150,7 @@ AzureFileSystem::getDirectoryContents(const std::string& path,
     auto azureStorageObj = factory.get()->getNewAzureStorageObject(path, account_);
     auto status = azureStorageObj->checkPath(path);
     if (status != StatusCode::OK) {
-        SPDLOG_WARN("AS: Check path failed: {} -> {}", path,
+        spdlog::warn("AS: Check path failed: {} -> {}", path,
             ovms::Status(status).string());
         return status;
     }
@@ -164,7 +167,7 @@ StatusCode AzureFileSystem::getDirectorySubdirs(const std::string& path,
     auto azureStorageObj = factory.get()->getNewAzureStorageObject(path, account_);
     auto status = azureStorageObj->checkPath(path);
     if (status != StatusCode::OK) {
-        SPDLOG_WARN("AS: Check path failed: {} -> {}", path,
+        spdlog::warn("AS: Check path failed: {} -> {}", path,
             ovms::Status(status).string());
         return status;
     }
@@ -181,7 +184,7 @@ StatusCode AzureFileSystem::getDirectoryFiles(const std::string& path,
     auto azureStorageObj = factory.get()->getNewAzureStorageObject(path, account_);
     auto status = azureStorageObj->checkPath(path);
     if (status != StatusCode::OK) {
-        SPDLOG_WARN("AS: Check path failed: {} -> {}", path,
+        spdlog::warn("AS: Check path failed: {} -> {}", path,
             ovms::Status(status).string());
         return status;
     }
@@ -198,7 +201,7 @@ StatusCode AzureFileSystem::readTextFile(const std::string& path,
     auto azureStorageObj = factory.get()->getNewAzureStorageObject(path, account_);
     auto status = azureStorageObj->checkPath(path);
     if (status != StatusCode::OK) {
-        SPDLOG_WARN("AS: Check path failed: {} -> {}", path,
+        spdlog::warn("AS: Check path failed: {} -> {}", path,
             ovms::Status(status).string());
         return status;
     }
@@ -235,14 +238,14 @@ StatusCode AzureFileSystem::downloadModelVersions(const std::string& path,
         auto azureStorageObj = factory.get()->getNewAzureStorageObject(versionpath, account_);
         auto status = azureStorageObj->checkPath(versionpath);
         if (status != StatusCode::OK) {
-            SPDLOG_WARN("AS: Check path failed: {} -> {}", versionpath,
+            spdlog::warn("AS: Check path failed: {} -> {}", versionpath,
                 ovms::Status(status).string());
             return status;
         }
 
         status = azureStorageObj->downloadFileFolderTo(lpath);
         if (status != StatusCode::OK) {
-            spdlog::error("Failed to download model version {}", versionpath);
+            spdlog::warn("Failed to download model version {}", versionpath);
             return status;
         }
     }
@@ -257,7 +260,7 @@ StatusCode AzureFileSystem::downloadFile(const std::string& remote_path,
     auto azureStorageObj = factory.get()->getNewAzureStorageObject(remote_path, account_);
     auto status = azureStorageObj->checkPath(remote_path);
     if (status != StatusCode::OK) {
-        SPDLOG_WARN("AS: Check path failed: {} -> {}", remote_path,
+        spdlog::warn("AS: Check path failed: {} -> {}", remote_path,
             ovms::Status(status).string());
         return status;
     }
@@ -273,7 +276,7 @@ StatusCode AzureFileSystem::downloadFileFolder(const std::string& path,
     auto azureStorageObj = factory.get()->getNewAzureStorageObject(path, account_);
     auto status = azureStorageObj->checkPath(path);
     if (status != StatusCode::OK) {
-        SPDLOG_WARN("AS: Check path failed: {} -> {}", path,
+        spdlog::warn("AS: Check path failed: {} -> {}", path,
             ovms::Status(status).string());
         return status;
     }
@@ -290,7 +293,7 @@ StatusCode AzureFileSystem::downloadFileFolderTo(const std::string& path,
     auto azureStorageObj = factory.get()->getNewAzureStorageObject(path, account_);
     auto status = azureStorageObj->checkPath(path);
     if (status != StatusCode::OK) {
-        SPDLOG_WARN("AS: Check path failed: {} -> {}", path,
+        spdlog::warn("AS: Check path failed: {} -> {}", path,
             ovms::Status(status).string());
         return status;
     }
@@ -305,7 +308,7 @@ StatusCode AzureFileSystem::deleteFileFolder(const std::string& path) {
     auto azureStorageObj = factory.get()->getNewAzureStorageObject(path, account_);
     auto status = azureStorageObj->checkPath(path);
     if (status != StatusCode::OK) {
-        SPDLOG_WARN("AS: Check path failed: {} -> {}", path,
+        spdlog::warn("AS: Check path failed: {} -> {}", path,
             ovms::Status(status).string());
         return status;
     }

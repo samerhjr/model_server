@@ -67,7 +67,7 @@ public:
     Status prepareInputsAndModelForInference();
 
     bool tryDisarmStreamIdGuard(const uint microseconds = 1) override {
-        SPDLOG_INFO("Trying to disarm stream id guard of node: {}", getName());
+        spdlog::debug("Trying to disarm stream id guard of node: {}", getName());
         if (this->nodeStreamIdGuard == nullptr) {
             return true;
         }
@@ -75,7 +75,7 @@ public:
     }
 
     void release() override {
-        SPDLOG_DEBUG("Releasing resources for node {}", getName());
+        spdlog::debug("Releasing resources for node {}", getName());
         this->nodeStreamIdGuard.reset();
         this->model.reset();
         this->modelUnloadGuard.reset();

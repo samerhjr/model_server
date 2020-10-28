@@ -37,7 +37,7 @@ StatusCode LocalFileSystem::fileExists(const std::string& path, bool* exists) {
     try {
         *exists = fs::exists(path);
     } catch (fs::filesystem_error& e) {
-        SPDLOG_DEBUG("Couldn't access path {}", e.what());
+        spdlog::debug("Couldn't access path {}", e.what());
         return StatusCode::PATH_INVALID;
     }
 
@@ -48,7 +48,7 @@ StatusCode LocalFileSystem::isDirectory(const std::string& path, bool* is_dir) {
     try {
         *is_dir = fs::is_directory(path);
     } catch (fs::filesystem_error& e) {
-        SPDLOG_DEBUG("Couldn't access path {}", e.what());
+        spdlog::debug("Couldn't access path {}", e.what());
         return StatusCode::PATH_INVALID;
     }
 
@@ -61,7 +61,7 @@ StatusCode LocalFileSystem::getDirectoryContents(const std::string& path, files_
             contents->insert(entry.path().string());
         }
     } catch (fs::filesystem_error& e) {
-        SPDLOG_DEBUG("Couldn't access path {}", e.what());
+        spdlog::debug("Couldn't access path {}", e.what());
         return StatusCode::PATH_INVALID;
     }
 
@@ -76,7 +76,7 @@ StatusCode LocalFileSystem::getDirectorySubdirs(const std::string& path, files_l
             }
         }
     } catch (fs::filesystem_error& e) {
-        SPDLOG_DEBUG("Couldn't access path {}", e.what());
+        spdlog::debug("Couldn't access path {}", e.what());
         return StatusCode::PATH_INVALID;
     }
 
@@ -91,7 +91,7 @@ StatusCode LocalFileSystem::getDirectoryFiles(const std::string& path, files_lis
             }
         }
     } catch (fs::filesystem_error& e) {
-        SPDLOG_DEBUG("Couldn't access path {}", e.what());
+        spdlog::debug("Couldn't access path {}", e.what());
         return StatusCode::PATH_INVALID;
     }
 
@@ -101,7 +101,7 @@ StatusCode LocalFileSystem::getDirectoryFiles(const std::string& path, files_lis
 StatusCode LocalFileSystem::readTextFile(const std::string& path, std::string* contents) {
     std::ifstream input(path, std::ios::in | std::ios::binary);
     if (!input) {
-        SPDLOG_DEBUG("Couldn't access path {}", path);
+        spdlog::debug("Couldn't access path {}", path);
         return StatusCode::PATH_INVALID;
     }
 

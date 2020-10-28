@@ -58,7 +58,7 @@ Status serializeBlobToTensorProto(
     case InferenceEngine::Precision::CUSTOM:
     default: {
         Status status = StatusCode::OV_UNSUPPORTED_SERIALIZATION_PRECISION;
-        SPDLOG_ERROR(status.string());
+        spdlog::error(status.string());
         return status;
     }
     }
@@ -82,7 +82,7 @@ Status serializePredictResponse(
             blob = inferRequest.GetBlob(networkOutput->getName());
         } catch (const InferenceEngine::details::InferenceEngineException& e) {
             Status status = StatusCode::OV_INTERNAL_SERIALIZATION_ERROR;
-            SPDLOG_ERROR("{}: {}", status.string(), e.what());
+            spdlog::error("{}: {}", status.string(), e.what());
             return status;
         }
         auto& tensorProto = (*response->mutable_outputs())[networkOutput->getMappedName()];

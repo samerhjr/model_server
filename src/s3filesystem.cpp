@@ -137,7 +137,7 @@ S3FileSystem::S3FileSystem(const Aws::SDKOptions& options, const std::string& s3
                 config.proxyPassword = sm[4].str();
             }
         } else {
-            spdlog::warn("Couldn't parse proxy: {}", default_proxy);
+            spdlog::error("Couldn't parse proxy: {}", default_proxy);
         }
     }
 

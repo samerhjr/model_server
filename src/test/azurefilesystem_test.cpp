@@ -28,7 +28,7 @@ namespace {
 std::string getEnvOrThrow(const std::string& name) {
     const char* p = std::getenv(name.c_str());
     if (!p) {
-        SPDLOG_ERROR("Missing required environment variable: {}", name);
+        spdlog::error("Missing required environment variable: {}", name);
         throw std::runtime_error("Missing required environment variable");
     }
     SPDLOG_TRACE("Value of env {} is {}", name, std::string(p));

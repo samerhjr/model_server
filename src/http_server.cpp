@@ -64,7 +64,7 @@ public:
 
 private:
     void processRequest(net_http::ServerRequestInterface* req) {
-        spdlog::info("REST request {}", req->uri_path());
+        spdlog::debug("REST request {}", req->uri_path());
         std::string body;
         int64_t num_bytes = 0;
         auto request_chunk = req->ReadRequestBytes(&num_bytes);
@@ -75,7 +75,7 @@ private:
 
         std::vector<std::pair<std::string, std::string>> headers;
         std::string output;
-        spdlog::info("Processing HTTP request: {} {} body: {} bytes",
+        spdlog::debug("Processing HTTP request: {} {} body: {} bytes",
             req->http_method(),
             req->uri_path(),
             body.size());
@@ -89,7 +89,7 @@ private:
         }
         req->WriteResponseString(output);
         if (http_status != net_http::HTTPStatusCode::OK) {
-            spdlog::error("Error Processing HTTP/REST request: {} {} Error: {}",
+            spdlog::debug("Processing HTTP/REST request failed: {} {}. Reason: {}",
                 req->http_method(),
                 req->uri_path(),
                 status.string());
