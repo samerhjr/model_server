@@ -41,7 +41,7 @@ Status DLNode::execute(ThreadSafeQueue<std::reference_wrapper<Node>>& notifyEndQ
     }
     auto streamId = this->nodeStreamIdGuard->tryGetId(WAIT_FOR_STREAM_ID_TIMEOUT_MICROSECONDS);
     if (!streamId) {
-        spdlog::debug("[Node: {}] Could not acquire stream Id right away", getName());
+        SPDLOG_DEBUG("[Node: {}] Could not acquire stream Id right away", getName());
         return StatusCode::PIPELINE_STREAM_ID_NOT_READY_YET;
     }
     auto& inferRequestsQueue = this->model->getInferRequestsQueue();
@@ -69,7 +69,7 @@ Status DLNode::requestExecuteRequiredResources() {
         this->modelUnloadGuard);
 
     if (!status.ok()) {
-        spdlog::debug("Getting modelInstance failed for node:{} with:{}", getName(), status.string());
+        SPDLOG_DEBUG("Getting modelInstance failed for node:{} with:{}", getName(), status.string());
         return status;
     }
 
@@ -89,7 +89,7 @@ Status DLNode::setInputsForInference(InferenceEngine::InferRequest& infer_reques
         for (const auto& kv : this->inputBlobs) {
             std::string realModelInputName;
             if (!getRealInputName(kv.first, &realModelInputName).ok()) {
-                spdlog::warn("DLNode::fetchResults (Node name {}); cannot find real model input name for alias: {}", getName(), kv.first);
+                SPDLOG_WARN("DLNode::fetchResults (Node name {}); cannot find real model input name for alias: {}", getName(), kv.first);
                 return StatusCode::INTERNAL_ERROR;
             }
             infer_request.SetBlob(realModelInputName, kv.second);
@@ -99,39 +99,39 @@ Status DLNode::setInputsForInference(InferenceEngine::InferRequest& infer_reques
         // OV can throw exceptions derived from std::logic_error.
     } catch (const InferenceEngine::details::InferenceEngineException& e) {
         status = StatusCode::OV_INTERNAL_DESERIALIZATION_ERROR;
-        spdlog::debug("[Node: {}] {}; exception message: {}", getName(), status.string(), e.what());
+        SPDLOG_DEBUG("[Node: {}] {}; exception message: {}", getName(), status.string(), e.what());
     } catch (std::logic_error& e) {
         status = StatusCode::OV_INTERNAL_DESERIALIZATION_ERROR;
-        spdlog::debug("[Node: {}] {}; exception message: {}", getName(), status.string(), e.what());
+        SPDLOG_DEBUG("[Node: {}] {}; exception message: {}", getName(), status.string(), e.what());
     } catch (...) {
         status = StatusCode::OV_INTERNAL_DESERIALIZATION_ERROR;
-        spdlog::debug("[Node: {}] {}; with unknown exception", getName(), status.string());
+        SPDLOG_DEBUG("[Node: {}] {}; with unknown exception", getName(), status.string());
     }
     return status;
 }
 
 Status DLNode::executeInference(ThreadSafeQueue<std::reference_wrapper<Node>>& notifyEndQueue, InferenceEngine::InferRequest& infer_request) {
     try {
-        spdlog::debug("Setting completion callback for node name: {}", this->getName());
+        SPDLOG_DEBUG("Setting completion callback for node name: {}", this->getName());
         infer_request.SetCompletionCallback([this, &notifyEndQueue, &infer_request]() {
-            spdlog::debug("Completion callback received for node name: {}", this->getName());
+            SPDLOG_DEBUG("Completion callback received for node name: {}", this->getName());
             // After inference is completed, input blobs are not needed anymore
             this->inputBlobs.clear();
             notifyEndQueue.push(*this);
             infer_request.SetCompletionCallback([]() {});  // reset callback on infer request
         });
-        spdlog::debug("Starting infer async for node name: {}", getName());
+        SPDLOG_DEBUG("Starting infer async for node name: {}", getName());
         infer_request.StartAsync();
     } catch (const InferenceEngine::details::InferenceEngineException& e) {
-        spdlog::debug("[Node: {}] Exception occured when starting async inference or setting completion callback on model: {}, error: {}",
+        SPDLOG_DEBUG("[Node: {}] Exception occured when starting async inference or setting completion callback on model: {}, error: {}",
             getName(), modelName, e.what());
         return StatusCode::OV_INTERNAL_INFERENCE_ERROR;
     } catch (const std::exception& e) {
-        spdlog::debug("[Node: {}] Exception occured when starting async inference or setting completion callback on  model: {}, error: {}",
+        SPDLOG_DEBUG("[Node: {}] Exception occured when starting async inference or setting completion callback on  model: {}, error: {}",
             getName(), modelName, e.what());
         return StatusCode::OV_INTERNAL_INFERENCE_ERROR;
     } catch (...) {
-        spdlog::debug("[Node: {}] Unknown exception occured when starting async inference or setting completion callback on model: {}",
+        SPDLOG_DEBUG("[Node: {}] Unknown exception occured when starting async inference or setting completion callback on model: {}",
             getName(), modelName);
         return StatusCode::OV_INTERNAL_INFERENCE_ERROR;
     }
@@ -141,25 +141,25 @@ Status DLNode::executeInference(ThreadSafeQueue<std::reference_wrapper<Node>>& n
 Status DLNode::fetchResults(BlobMap& outputs) {
     // ::execute needs to be executed before ::fetchResults
     if (this->model == nullptr) {
-        spdlog::debug("[Node: {}] Fetching results failed due to earlier execution failure", getName());
+        SPDLOG_DEBUG("[Node: {}] Fetching results failed due to earlier execution failure", getName());
         return StatusCode::UNKNOWN_ERROR;
     }
 
     // Get infer request corresponding to this node model
     auto streamId = this->nodeStreamIdGuard->tryGetId();
     if (!streamId) {
-        spdlog::debug("[Node: {}] Fetching results failed - node had stream Id never assigned", getName());
+        SPDLOG_DEBUG("[Node: {}] Fetching results failed - node had stream Id never assigned", getName());
         return StatusCode::UNKNOWN_ERROR;
     }
     auto& infer_request = this->model->getInferRequestsQueue().getInferRequest(streamId.value());
     // Wait for blob results
-    spdlog::debug("[Node: {}] Waiting for infer request with streamId:{} to finish", getName(), streamId.value());
+    SPDLOG_DEBUG("[Node: {}] Waiting for infer request with streamId:{} to finish", getName(), streamId.value());
     auto ov_status = infer_request.Wait(InferenceEngine::IInferRequest::RESULT_READY);
-    spdlog::debug("[Node: {}] Infer request with streamId:{} finished", getName(), streamId.value());
+    SPDLOG_DEBUG("[Node: {}] Infer request with streamId:{} finished", getName(), streamId.value());
     this->inputBlobs.clear();
     if (ov_status != InferenceEngine::StatusCode::OK) {
         Status status = StatusCode::OV_INTERNAL_INFERENCE_ERROR;
-        spdlog::debug("[Node: {}] Async infer failed: {}; OV StatusCode: {}", getName(), status.string(), ov_status);
+        SPDLOG_DEBUG("[Node: {}] Async infer failed: {}; OV StatusCode: {}", getName(), status.string(), ov_status);
         return status;
     }
 
@@ -174,26 +174,26 @@ Status DLNode::fetchResults(BlobMap& outputs) {
             try {
                 std::string realModelOutputName;
                 if (!getRealOutputName(output_name, &realModelOutputName).ok()) {
-                    spdlog::warn("[Node: {}] Cannot find real model output name for alias: {}", getName(), output_name);
+                    SPDLOG_WARN("[Node: {}] Cannot find real model output name for alias: {}", getName(), output_name);
                     return StatusCode::INTERNAL_ERROR;
                 }
-                spdlog::debug("[Node: {}] Getting blob from model:{}, inferRequestStreamId:{}, blobName:{}",
+                SPDLOG_DEBUG("[Node: {}] Getting blob from model:{}, inferRequestStreamId:{}, blobName:{}",
                     getName(), modelName, streamId.value(), realModelOutputName);
                 const auto blob = infer_request.GetBlob(realModelOutputName);
-                spdlog::debug("[Node: {}] Creating copy of blob from model:{}, inferRequestStreamId:{}, blobName:{}",
+                SPDLOG_DEBUG("[Node: {}] Creating copy of blob from model:{}, inferRequestStreamId:{}, blobName:{}",
                     getName(), modelName, streamId.value(), realModelOutputName);
                 const auto copiedBlob = blobClone(blob);
                 if (copiedBlob == nullptr) {
-                    spdlog::error("[Node: {}] Cannot copy blob - buffer sizes mismatch", getName());
+                    SPDLOG_ERROR("[Node: {}] Cannot copy blob - buffer sizes mismatch", getName());
                     return StatusCode::INTERNAL_ERROR;
                 }
                 outputs.emplace(std::make_pair(output_name, std::move(copiedBlob)));
             } catch (const InferenceEngine::details::InferenceEngineException& e) {
                 Status status = StatusCode::OV_INTERNAL_SERIALIZATION_ERROR;
-                spdlog::debug("[Node: {}] Error during getting blob {}; exception message: {}", getName(), status.string(), e.what());
+                SPDLOG_DEBUG("[Node: {}] Error during getting blob {}; exception message: {}", getName(), status.string(), e.what());
                 return status;
             }
-            spdlog::debug("[Node: {}]: Blob with name {} has been prepared", getName(), output_name);
+            SPDLOG_DEBUG("[Node: {}]: Blob with name {} has been prepared", getName(), output_name);
         }
     }
     // After results are fetched, model and inference request are not needed anymore
@@ -207,7 +207,7 @@ Status DLNode::validate(const InferenceEngine::Blob::Ptr& blob, const TensorInfo
         ss << "Expected: " << info.getPrecisionAsString()
            << "; Actual: " << TensorInfo::getPrecisionAsString(blob->getTensorDesc().getPrecision());
         const std::string details = ss.str();
-        spdlog::debug("[Node: {}] Invalid precision - {}", getName(), details);
+        SPDLOG_DEBUG("[Node: {}] Invalid precision - {}", getName(), details);
         return Status(StatusCode::INVALID_PRECISION, details);
     }
 
@@ -218,14 +218,14 @@ Status DLNode::validate(const InferenceEngine::Blob::Ptr& blob, const TensorInfo
         if (std::equal(info.getShape().begin() + 1, info.getShape().end(), blob->getTensorDesc().getDims().begin() + 1)) {
             ss << "Expected: " << info.getShape()[0] << "; Actual: " << blob->getTensorDesc().getDims()[0];
             const std::string details = ss.str();
-            spdlog::debug("[Node: {}] Invalid batch size - {}", getName(), details);
+            SPDLOG_DEBUG("[Node: {}] Invalid batch size - {}", getName(), details);
             return Status(StatusCode::INVALID_BATCH_SIZE, details);
         } else {
             // Otherwise whole shape is incorrect
             ss << "Expected: " << TensorInfo::shapeToString(info.getShape())
                << "; Actual: " << TensorInfo::shapeToString(blob->getTensorDesc().getDims());
             const std::string details = ss.str();
-            spdlog::debug("Node: {}] Invalid shape - {}", getName(), details);
+            SPDLOG_DEBUG("Node: {}] Invalid shape - {}", getName(), details);
             return Status(StatusCode::INVALID_SHAPE, details);
         }
     }
@@ -235,7 +235,7 @@ Status DLNode::validate(const InferenceEngine::Blob::Ptr& blob, const TensorInfo
         ss << "Expected: " << TensorInfo::shapeToString(info.getShape())
            << "; Actual: " << TensorInfo::shapeToString(blob->getTensorDesc().getDims());
         const std::string details = ss.str();
-        spdlog::debug("Node: {}] Invalid shape - {}", getName(), details);
+        SPDLOG_DEBUG("Node: {}] Invalid shape - {}", getName(), details);
         return Status(StatusCode::INVALID_SHAPE, details);
     }
 
@@ -256,7 +256,7 @@ Status DLNode::prepareInputsAndModelForInference() {
             std::stringstream ss;
             ss << "Required input: " << name;
             const std::string details = ss.str();
-            spdlog::debug("[Node: {}] Missing input with specific name - {}", getName(), details);
+            SPDLOG_DEBUG("[Node: {}] Missing input with specific name - {}", getName(), details);
             return Status(StatusCode::INVALID_MISSING_INPUT, details);
         }
         auto& inputInfo = *inputsInfo.at(name);

@@ -16,6 +16,7 @@
 #include "pipeline_factory.hpp"
 
 #include "prediction_service_utils.hpp"
+#include "logging.hpp"
 
 namespace ovms {
 
@@ -24,7 +25,7 @@ Status toNodeKind(const std::string& str, NodeKind& nodeKind) {
         nodeKind = NodeKind::DL;
         return StatusCode::OK;
     }
-    spdlog::warn("Unsupported node type:{}", str);
+    SPDLOG_LOGGER_WARN(ensemble_logger, "Unsupported node type:{}", str);
     return StatusCode::PIPELINE_NODE_WRONG_KIND_CONFIGURATION;
 }
 
@@ -37,7 +38,7 @@ Status PipelineDefinition::create(std::unique_ptr<Pipeline>& pipeline,
     EntryNode* entry = nullptr;
     ExitNode* exit = nullptr;
     for (const auto& info : nodeInfos) {
-        spdlog::debug("Creating pipeline:{}. Adding nodeName:{}, modelName:{}",
+        SPDLOG_LOGGER_DEBUG(ensemble_logger, "Creating pipeline:{}. Adding nodeName:{}, modelName:{}",
             info.nodeName, info.modelName);
         switch (info.kind) {
         case NodeKind::ENTRY: {
@@ -67,7 +68,7 @@ Status PipelineDefinition::create(std::unique_ptr<Pipeline>& pipeline,
         const auto& dependantNode = nodes.at(kv.first);
         for (const auto& pair : kv.second) {
             const auto& dependencyNode = nodes.at(pair.first);
-            spdlog::debug("Connecting from:{}, to:{}", dependencyNode->getName(), dependantNode->getName());
+            SPDLOG_LOGGER_DEBUG(ensemble_logger, "Connecting from:{}, to:{}", dependencyNode->getName(), dependantNode->getName());
             Pipeline::connect(*dependencyNode, *dependantNode, pair.second);
         }
     }
@@ -82,27 +83,27 @@ Status PipelineDefinition::validateNode(ModelManager& manager, NodeInfo& node) {
     std::unique_ptr<ModelInstanceUnloadGuard> nodeModelInstanceUnloadGuard;
     std::shared_ptr<ModelInstance> nodeModelInstance;
     tensor_map_t nodeInputs;
-    spdlog::debug("Validation of node {} type {}", node.nodeName, node.kind);
+    SPDLOG_LOGGER_DEBUG(ensemble_logger, "Validation of node {} type {}", node.nodeName, node.kind);
 
     Status result;
     if (node.kind == NodeKind::DL) {
         result = getModelInstance(manager, node.modelName, node.modelVersion.value_or(0), nodeModelInstance,
             nodeModelInstanceUnloadGuard);
         if (!result.ok()) {
-            spdlog::error("Validation of pipeline({}) definition failed. Missing model: {} version: {}", this->pipelineName, node.modelName, node.modelVersion.value_or(0));
+            SPDLOG_LOGGER_ERROR(ensemble_logger, "Validation of pipeline({}) definition failed. Missing model: {} version: {}", this->pipelineName, node.modelName, node.modelVersion.value_or(0));
             return StatusCode::MODEL_NAME_MISSING;
         }
 
         auto& config = nodeModelInstance->getModelConfig();
         if (config.getBatchingMode() == Mode::AUTO) {
-            spdlog::error("Validation of pipeline({}) definition failed. Node name {} used model name {} with dynamic batch size which is forbidden.", this->pipelineName, node.nodeName, node.modelName);
+            SPDLOG_LOGGER_ERROR(ensemble_logger, "Validation of pipeline({}) definition failed. Node name {} used model name {} with dynamic batch size which is forbidden.", this->pipelineName, node.nodeName, node.modelName);
             return StatusCode::FORBIDDEN_MODEL_DYNAMIC_PARAMETER;
         }
 
         auto& shapes = config.getShapes();
         for (auto& shape : shapes) {
             if (shape.second.shapeMode == Mode::AUTO) {
-                spdlog::error("Validation of pipeline({}) definition failed. Node name {} used model name {} with dynamic shape which is forbidden.", this->pipelineName, node.nodeName, node.modelName);
+                SPDLOG_LOGGER_ERROR(ensemble_logger, "Validation of pipeline({}) definition failed. Node name {} used model name {} with dynamic shape which is forbidden.", this->pipelineName, node.nodeName, node.modelName);
                 return StatusCode::FORBIDDEN_MODEL_DYNAMIC_PARAMETER;
             }
         }
@@ -118,7 +119,7 @@ Status PipelineDefinition::validateNode(ModelManager& manager, NodeInfo& node) {
         };
         std::vector<NodeInfo>::iterator sourceNodeInfo = std::find_if(std::begin(nodeInfos), std::end(nodeInfos), findByName);
         if (sourceNodeInfo == std::end(nodeInfos)) {
-            spdlog::error("Validation of pipeline({}) definition failed. For node: {} missing dependency node: {} ", this->pipelineName, node.nodeName, sourceNodeName);
+            SPDLOG_LOGGER_ERROR(ensemble_logger, "Validation of pipeline({}) definition failed. For node: {} missing dependency node: {} ", this->pipelineName, node.nodeName, sourceNodeName);
             return StatusCode::MODEL_NAME_MISSING;
         }
 
@@ -127,13 +128,13 @@ Status PipelineDefinition::validateNode(ModelManager& manager, NodeInfo& node) {
             result = getModelInstance(manager, sourceNodeInfo->modelName, 0, sourceNodeModelInstance,
                 sourceNodeModelInstanceUnloadGuard);
             if (!result.ok()) {
-                spdlog::error("Validation of pipeline({}) definition failed. Missing model: {} version: {}", this->pipelineName, sourceNodeInfo->modelName, sourceNodeInfo->modelVersion.value_or(0));
+                SPDLOG_LOGGER_ERROR(ensemble_logger, "Validation of pipeline({}) definition failed. Missing model: {} version: {}", this->pipelineName, sourceNodeInfo->modelName, sourceNodeInfo->modelVersion.value_or(0));
                 return StatusCode::MODEL_MISSING;
             }
             const tensor_map_t& sourceNodeOutputs = sourceNodeModelInstance->getOutputsInfo();
 
             if (connection.second.size() == 0) {
-                spdlog::error("Validation of pipeline({}) definition failed. Missing dependency mapping for node: {}", this->pipelineName, node.nodeName);
+                SPDLOG_LOGGER_ERROR(ensemble_logger, "Validation of pipeline({}) definition failed. Missing dependency mapping for node: {}", this->pipelineName, node.nodeName);
                 return StatusCode::PIPELINE_DEFINITION_MISSING_DEPENDENCY_MAPPING;
             }
 
@@ -147,7 +148,7 @@ Status PipelineDefinition::validateNode(ModelManager& manager, NodeInfo& node) {
                 }
                 auto dependencyOutput = sourceNodeOutputs.find(dependencyOutputName);
                 if (dependencyOutput == sourceNodeOutputs.end()) {
-                    spdlog::error("Validation of pipeline({}) definition failed. Missing output: {} of model: {}", this->pipelineName, dependencyOutputName, sourceNodeModelInstance->getName());
+                    SPDLOG_LOGGER_ERROR(ensemble_logger, "Validation of pipeline({}) definition failed. Missing output: {} of model: {}", this->pipelineName, dependencyOutputName, sourceNodeModelInstance->getName());
                     return StatusCode::INVALID_MISSING_OUTPUT;
                 }
 
@@ -157,7 +158,7 @@ Status PipelineDefinition::validateNode(ModelManager& manager, NodeInfo& node) {
                 std::string& inputName = alias.second;
                 auto nodeInput = nodeInputs.find(inputName);
                 if (nodeInput == nodeInputs.end()) {
-                    spdlog::error("Validation of pipeline({}) definition failed. Missing input: {} of node: {}", this->pipelineName, inputName, node.nodeName);
+                    SPDLOG_LOGGER_ERROR(ensemble_logger, "Validation of pipeline({}) definition failed. Missing input: {} of node: {}", this->pipelineName, inputName, node.nodeName);
                     return StatusCode::INVALID_MISSING_INPUT;
                 }
             }
@@ -180,7 +181,7 @@ Status PipelineDefinition::validateForCycles() {
 
     const auto& itr = std::find_if(std::begin(nodeInfos), std::end(nodeInfos), pred);
     if (itr == nodeInfos.end()) {
-        spdlog::error("Pipeline does not contain response node.");
+        SPDLOG_LOGGER_ERROR(ensemble_logger, "Pipeline does not contain response node.");
         return StatusCode::PIPELINE_MISSING_ENTRY_OR_EXIT;
     }
     std::string nodeName = itr->nodeName;
@@ -192,7 +193,7 @@ Status PipelineDefinition::validateForCycles() {
         const auto& connectedToNode = connections[nodeName];
         for (const auto& node : connectedToNode) {
             if (nodeName == node.first) {
-                spdlog::error("Node {} is connected to itself.", nodeName);
+                SPDLOG_LOGGER_ERROR(ensemble_logger, "Node {} is connected to itself.", nodeName);
                 return StatusCode::PIPELINE_CYCLE_FOUND;
             }
 
@@ -211,7 +212,7 @@ Status PipelineDefinition::validateForCycles() {
                             cycleNodes += ", ";
                         }
                     }
-                    spdlog::error("Following nodes creates cycle: {}", cycleNodes);
+                    SPDLOG_LOGGER_ERROR(ensemble_logger, "Following nodes creates cycle: {}", cycleNodes);
                     return StatusCode::PIPELINE_CYCLE_FOUND;
                 }
             }
@@ -221,7 +222,7 @@ Status PipelineDefinition::validateForCycles() {
             if (parentNodes.size() == 0) {
                 anyUnvisitedLeft = false;
                 if (visited.size() != nodeInfos.size()) {
-                    spdlog::error("There are nodes not connected to pipeline.");
+                    SPDLOG_LOGGER_ERROR(ensemble_logger, "There are nodes not connected to pipeline.");
                     return StatusCode::PIPELINE_CONTAINS_UNCONNECTED_NODES;
                 }
             } else {
@@ -234,7 +235,7 @@ Status PipelineDefinition::validateForCycles() {
 }
 
 Status PipelineDefinition::validateNodes(ModelManager& manager) {
-    spdlog::debug("Validation of pipeline definition nodes started.");
+    SPDLOG_LOGGER_DEBUG(ensemble_logger, "Validation of pipeline definition nodes started.");
     bool entryFound = false;
     bool exitFound = false;
     for (auto& node : nodeInfos) {
@@ -262,11 +263,11 @@ Status PipelineDefinition::validateNodes(ModelManager& manager) {
         }
     }
     if (!entryFound) {
-        spdlog::error("PipelineDefinition: {} is missing request node", pipelineName);
+        SPDLOG_LOGGER_ERROR(ensemble_logger, "PipelineDefinition: {} is missing request node", pipelineName);
         return StatusCode::PIPELINE_MISSING_ENTRY_OR_EXIT;
     }
     if (!exitFound) {
-        spdlog::error("PipelineDefinition: {} is missing response node", pipelineName);
+        SPDLOG_LOGGER_ERROR(ensemble_logger, "PipelineDefinition: {} is missing response node", pipelineName);
         return StatusCode::PIPELINE_MISSING_ENTRY_OR_EXIT;
     }
     return StatusCode::OK;
@@ -277,7 +278,7 @@ Status PipelineFactory::createDefinition(const std::string& pipelineName,
     const pipeline_connections_t& connections,
     ModelManager& manager) {
     if (definitionExists(pipelineName)) {
-        spdlog::warn("Two pipelines with the same name:{} defined in config file. Ignoring the second definition", pipelineName);
+        SPDLOG_LOGGER_WARN(ensemble_logger, "Two pipelines with the same name:{} defined in config file. Ignoring the second definition", pipelineName);
         return StatusCode::PIPELINE_DEFINITION_ALREADY_EXIST;
     }
     std::unique_ptr<PipelineDefinition> pipelineDefinition = std::make_unique<PipelineDefinition>(pipelineName, nodeInfos, connections);
@@ -304,7 +305,7 @@ Status PipelineFactory::create(std::unique_ptr<Pipeline>& pipeline,
     tensorflow::serving::PredictResponse* response,
     ModelManager& manager) const {
     if (!definitionExists(name)) {
-        spdlog::warn("Pipeline with requested name:{} does not exist", name);
+        SPDLOG_LOGGER_WARN(ensemble_logger, "Pipeline with requested name:{} does not exist", name);
         return StatusCode::PIPELINE_DEFINITION_NAME_MISSING;
     }
     std::shared_lock lock(definitionsMtx);

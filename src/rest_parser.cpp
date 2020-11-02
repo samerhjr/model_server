@@ -41,7 +41,7 @@ void RestParser::removeUnusedInputs() {
     auto it = inputs.begin();
     while (it != inputs.end()) {
         if (!it->second.tensor_shape().dim_size()) {
-            spdlog::debug("Removing {} input from proto since it's not included in the request", it->first);
+            SPDLOG_DEBUG("Removing {} input from proto since it's not included in the request", it->first);
             it = inputs.erase(it);
         } else {
             it++;
@@ -132,7 +132,7 @@ Status RestParser::parseRowFormat(rapidjson::Value& node) {
         auto inputsIterator = requestProto.mutable_inputs()->begin();
         if (inputsIterator == requestProto.mutable_inputs()->end()) {
             const std::string details = "Failed to parse row formatted request.";
-            spdlog::error("Internal error occured: {}", details);
+            SPDLOG_ERROR("Internal error occured: {}", details);
             return Status(StatusCode::INTERNAL_ERROR, details);
         }
         if (!parseArray(node, 0, inputsIterator->second, inputsIterator->first)) {
@@ -162,7 +162,7 @@ Status RestParser::parseColumnFormat(rapidjson::Value& node) {
         auto inputsIterator = requestProto.mutable_inputs()->begin();
         if (inputsIterator == requestProto.mutable_inputs()->end()) {
             const std::string details = "Failed to parse column formatted request.";
-            spdlog::error("Internal error occured: {}", details);
+            SPDLOG_ERROR("Internal error occured: {}", details);
             return Status(StatusCode::INTERNAL_ERROR, details);
         }
         if (!parseArray(node, 0, inputsIterator->second, inputsIterator->first)) {

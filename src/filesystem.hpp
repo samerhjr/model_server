@@ -130,7 +130,7 @@ public:
         std::string file_template = "/tmp/fileXXXXXX";
         char* tmp_folder = mkdtemp(const_cast<char*>(file_template.c_str()));
         if (tmp_folder == nullptr) {
-            spdlog::error("Failed to create local temp folder: {} {}", file_template, strerror(errno));
+            SPDLOG_ERROR("Failed to create local temp folder: {} {}", file_template, strerror(errno));
             return StatusCode::FILESYSTEM_ERROR;
         }
         fs::permissions(tmp_folder,
@@ -181,7 +181,7 @@ public:
         int status =
             mkdir(const_cast<char*>(path.c_str()), S_IRUSR | S_IWUSR | S_IXUSR);
         if (status == -1) {
-            spdlog::error("Failed to create local folder: {} {} ", path, strerror(errno));
+            SPDLOG_ERROR("Failed to create local folder: {} {} ", path, strerror(errno));
             return StatusCode::PATH_INVALID;
         }
         return StatusCode::OK;

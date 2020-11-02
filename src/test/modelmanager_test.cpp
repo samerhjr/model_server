@@ -22,6 +22,7 @@
 #include "../localfilesystem.hpp"
 #include "../model.hpp"
 #include "../modelmanager.hpp"
+#include "../logging.hpp"
 #include "mockmodelinstancechangingstates.hpp"
 #include "test_utils.hpp"
 

@@ -35,7 +35,7 @@ namespace ovms {
 size_t getRequestBatchSize(const tensorflow::serving::PredictRequest* request) {
     auto requestInputItr = request->inputs().begin();
     if (requestInputItr == request->inputs().end()) {
-        spdlog::warn("Failed to get batch size of a request. Validation of request failed");
+        SPDLOG_WARN("Failed to get batch size of a request. Validation of request failed");
         return 0;
     }
     auto& requestInput = requestInputItr->second;  // assuming same batch size for all inputs
@@ -61,7 +61,7 @@ Status getModelInstance(ovms::ModelManager& manager,
     ovms::model_version_t modelVersionId,
     std::shared_ptr<ovms::ModelInstance>& modelInstance,
     std::unique_ptr<ModelInstanceUnloadGuard>& modelInstanceUnloadGuardPtr) {
-    spdlog::debug("Requesting model:{}; version:{}.", modelName, modelVersionId);
+    SPDLOG_DEBUG("Requesting model:{}; version:{}.", modelName, modelVersionId);
 
     auto model = manager.findModelByName(modelName);
     if (model == nullptr) {
@@ -86,7 +86,7 @@ Status getPipeline(ovms::ModelManager& manager,
     const tensorflow::serving::PredictRequest* request,
     tensorflow::serving::PredictResponse* response) {
 
-    spdlog::debug("Requesting pipeline: {};", request->model_spec().name());
+    SPDLOG_DEBUG("Requesting pipeline: {};", request->model_spec().name());
     auto status = manager.createPipeline(pipelinePtr, request->model_spec().name(), request, response);
     return status;
 }
@@ -97,12 +97,12 @@ Status performInference(ovms::OVInferRequestsQueue& inferRequestsQueue, const in
         InferenceEngine::StatusCode sts = inferRequest.Wait(InferenceEngine::IInferRequest::RESULT_READY);
         if (sts != InferenceEngine::StatusCode::OK) {
             Status status = StatusCode::OV_INTERNAL_INFERENCE_ERROR;
-            spdlog::error("Async infer failed {}: {}", status.string(), sts);
+            SPDLOG_ERROR("Async infer failed {}: {}", status.string(), sts);
             return status;
         }
     } catch (const InferenceEngine::details::InferenceEngineException& e) {
         Status status = StatusCode::OV_INTERNAL_INFERENCE_ERROR;
-        spdlog::error("Async caught an exception {}: {}", status.string(), e.what());
+        SPDLOG_ERROR("Async caught an exception {}: {}", status.string(), e.what());
         return status;
     }
     return StatusCode::OK;
@@ -127,7 +127,7 @@ Status inference(
     int executingInferId = executingStreamIdGuard.getId();
     InferenceEngine::InferRequest& inferRequest = inferRequestsQueue.getInferRequest(executingInferId);
     timer.stop("get infer request");
-    spdlog::debug("Getting infer req duration in model {}, version {}, nireq {}: {:.3f} ms",
+    SPDLOG_DEBUG("Getting infer req duration in model {}, version {}, nireq {}: {:.3f} ms",
         requestProto->model_spec().name(), modelVersion.getVersion(), executingInferId, timer.elapsed<microseconds>("get infer request") / 1000);
 
     timer.start("deserialize");
@@ -135,14 +135,14 @@ Status inference(
     timer.stop("deserialize");
     if (!status.ok())
         return status;
-    spdlog::debug("Deserialization duration in model {}, version {}, nireq {}: {:.3f} ms",
+    SPDLOG_DEBUG("Deserialization duration in model {}, version {}, nireq {}: {:.3f} ms",
         requestProto->model_spec().name(), modelVersion.getVersion(), executingInferId, timer.elapsed<microseconds>("deserialize") / 1000);
     timer.start("prediction");
     status = performInference(inferRequestsQueue, executingInferId, inferRequest);
     timer.stop("prediction");
     if (!status.ok())
         return status;
-    spdlog::debug("Prediction duration in model {}, version {}, nireq {}: {:.3f} ms",
+    SPDLOG_DEBUG("Prediction duration in model {}, version {}, nireq {}: {:.3f} ms",
         requestProto->model_spec().name(), modelVersion.getVersion(), executingInferId, timer.elapsed<microseconds>("prediction") / 1000);
 
     timer.start("serialize");
@@ -150,7 +150,7 @@ Status inference(
     timer.stop("serialize");
     if (!status.ok())
         return status;
-    spdlog::debug("Serialization duration in model {}, version {}, nireq {}: {:.3f} ms",
+    SPDLOG_DEBUG("Serialization duration in model {}, version {}, nireq {}: {:.3f} ms",
         requestProto->model_spec().name(), modelVersion.getVersion(), executingInferId, timer.elapsed<microseconds>("serialize") / 1000);
 
     return StatusCode::OK;
@@ -165,15 +165,15 @@ Status reloadModelIfRequired(
     if (status.batchSizeChangeRequired()) {
         status = modelInstance.reloadModel(getRequestBatchSize(requestProto), {}, modelUnloadGuardPtr);
         if (!status.ok()) {
-            spdlog::error("Model instance reload (batch size change) failed. Status Code: {}, Error {}", status.getCode(), status.string());
+            SPDLOG_ERROR("Model instance reload (batch size change) failed. Status Code: {}, Error {}", status.getCode(), status.string());
         }
     } else if (status.reshapeRequired()) {
         status = modelInstance.reloadModel(0, getRequestShapes(requestProto), modelUnloadGuardPtr);
         if (!status.ok() && status != StatusCode::RESHAPE_ERROR) {
-            spdlog::error("Model instance reload (reshape) failed. Status Code: {}, Error: {}", status.getCode(), status.string());
+            SPDLOG_ERROR("Model instance reload (reshape) failed. Status Code: {}, Error: {}", status.getCode(), status.string());
         }
     } else if (!status.ok()) {
-        spdlog::warn("Validation of inferRequest failed. Status Code: {}, Error: {}", status.getCode(), status.string());
+        SPDLOG_WARN("Validation of inferRequest failed. Status Code: {}, Error: {}", status.getCode(), status.string());
     }
     return status;
 }

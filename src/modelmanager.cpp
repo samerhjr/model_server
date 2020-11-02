@@ -28,7 +28,6 @@
 #include <rapidjson/document.h>
 #include <rapidjson/istreamwrapper.h>
 #include <rapidjson/prettywriter.h>
-#include <spdlog/spdlog.h>
 #include <sys/stat.h>
 
 #include "azurefilesystem.hpp"
@@ -40,6 +39,7 @@
 #include "pipeline_factory.hpp"
 #include "s3filesystem.hpp"
 #include "schema.hpp"
+#include "logging.hpp"
 
 namespace ovms {
 
@@ -58,7 +58,7 @@ Status ModelManager::start() {
     }
 
     if (!status.ok()) {
-        spdlog::error("Couldn't start model manager");
+        SPDLOG_LOGGER_ERROR(modelmanager_logger, "Couldn't start model manager");
         return status;
     }
 
@@ -87,28 +87,28 @@ Status ModelManager::startFromConfig() {
 
     auto status = modelConfig.parsePluginConfig(config.pluginConfig());
     if (!status.ok()) {
-        spdlog::error("Couldn't parse plugin config");
+        SPDLOG_LOGGER_ERROR(modelmanager_logger, "Couldn't parse plugin config");
         return status;
     }
 
     status = modelConfig.parseModelVersionPolicy(config.modelVersionPolicy());
     if (!status.ok()) {
-        spdlog::error("Couldn't parse model version policy. {}", status.string());
+        SPDLOG_LOGGER_ERROR(modelmanager_logger, "Couldn't parse model version policy. {}", status.string());
         return status;
     }
 
     status = modelConfig.parseShapeParameter(config.shape());
     if (!status.ok()) {
-        spdlog::error("Couldn't parse shape parameter");
+        SPDLOG_LOGGER_ERROR(modelmanager_logger, "Couldn't parse shape parameter");
         return status;
     }
 
     bool batchSizeSet = (modelConfig.getBatchingMode() != FIXED || modelConfig.getBatchSize() != 0);
     bool shapeSet = (modelConfig.getShapes().size() > 0);
 
-    spdlog::debug("Batch size set: {}, shape set: {}", batchSizeSet, shapeSet);
+    SPDLOG_DEBUG("Batch size set: {}, shape set: {}", batchSizeSet, shapeSet);
     if (batchSizeSet && shapeSet) {
-        spdlog::warn("Both shape and batch size have been defined. Batch size parameter will be ignored.");
+        SPDLOG_LOGGER_WARN(modelmanager_logger, "Both shape and batch size have been defined. Batch size parameter will be ignored.");
         modelConfig.setBatchingMode(FIXED);
         modelConfig.setBatchSize(0);
     }
@@ -131,7 +131,7 @@ void processNodeInputs(const std::string nodeName, const rapidjson::Value::Const
             const std::string inputName = objectNameValue.name.GetString();
             const std::string sourceNodeName = objectNameValue.value.GetObject()["node_name"].GetString();
             const std::string sourceOutputName = objectNameValue.value.GetObject()["data_item"].GetString();
-            spdlog::debug("Creating node dependencies mapping request. Node:{} input:{} <- SourceNode:{} output:{}",
+            SPDLOG_DEBUG("Creating node dependencies mapping request. Node:{} input:{} <- SourceNode:{} output:{}",
                 nodeName, inputName, sourceNodeName, sourceOutputName);
             if (connections.find(nodeName) == connections.end()) {
                 connections[nodeName] = {
@@ -149,7 +149,7 @@ void processNodeOutputs(const rapidjson::Value::ConstMemberIterator& nodeOutputs
     for (const auto& nodeOutput : nodeOutputsItr->value.GetArray()) {
         const std::string modelOutputName = nodeOutput.GetObject()["data_item"].GetString();
         const std::string nodeOutputName = nodeOutput.GetObject()["alias"].GetString();
-        spdlog::debug("Alliasing node:{} model_name:{} output:{}, under alias:{}",
+        SPDLOG_DEBUG("Alliasing node:{} model_name:{} output:{}, under alias:{}",
             nodeName, modelName, modelOutputName, nodeOutputName);
         nodeOutputNameAlias[nodeOutputName] = modelOutputName;
     }
@@ -157,7 +157,7 @@ void processNodeOutputs(const rapidjson::Value::ConstMemberIterator& nodeOutputs
 
 void processPipelineConfig(rapidjson::Document& configJson, const rapidjson::Value& pipelineConfig, std::set<std::string>& pipelinesInConfigFile, PipelineFactory& factory, ModelManager& manager) {
     const std::string pipelineName = pipelineConfig["name"].GetString();
-    spdlog::info("Reading pipeline:{} configuration", pipelineName);
+    SPDLOG_LOGGER_INFO(modelmanager_logger, "Reading pipeline:{} configuration", pipelineName);
     auto itr2 = pipelineConfig.FindMember("nodes");
 
     std::vector<NodeInfo> info{
@@ -173,7 +173,7 @@ void processPipelineConfig(rapidjson::Document& configJson, const rapidjson::Val
         const std::string nodeKindStr = nodeConfig["type"].GetString();
         auto nodeOutputsItr = nodeConfig.FindMember("outputs");
         if (nodeOutputsItr == nodeConfig.MemberEnd() || !nodeOutputsItr->value.IsArray()) {
-            spdlog::warn("Pipeline:{} does not have valid outputs configuration", pipelineName);
+            SPDLOG_LOGGER_WARN(modelmanager_logger, "Pipeline:{} does not have valid outputs configuration", pipelineName);
             return;
         }
         std::unordered_map<std::string, std::string> nodeOutputNameAlias;  // key:alias, value realName
@@ -187,10 +187,10 @@ void processPipelineConfig(rapidjson::Document& configJson, const rapidjson::Val
         NodeKind nodeKind;
         auto status = toNodeKind(nodeKindStr, nodeKind);
         if (!status.ok()) {
-            spdlog::warn("Parsing node kind failed:{}", nodeKindStr);
+            SPDLOG_LOGGER_WARN(modelmanager_logger, "Parsing node kind failed:{}", nodeKindStr);
             return;
         }
-        spdlog::debug("Creating node:{} type:{} model_name:{} modelVersion:{}",
+        SPDLOG_DEBUG("Creating node:{} type:{} model_name:{} modelVersion:{}",
             nodeName, nodeKindStr, modelName, modelVersion.value_or(0));
         info.emplace_back(std::move(NodeInfo{nodeKind, nodeName, modelName, modelVersion, nodeOutputNameAlias}));
         auto nodeInputItr = nodeConfig.FindMember("inputs");
@@ -211,7 +211,7 @@ void processPipelineConfig(rapidjson::Document& configJson, const rapidjson::Val
 Status ModelManager::loadPipelinesConfig(rapidjson::Document& configJson) {
     const auto itrp = configJson.FindMember("pipeline_config_list");
     if (itrp == configJson.MemberEnd() || !itrp->value.IsArray()) {
-        spdlog::info("Configuration file doesn't have pipelines property.");
+        SPDLOG_LOGGER_INFO(modelmanager_logger, "Configuration file doesn't have pipelines property.");
         return StatusCode::OK;
     }
     std::set<std::string> pipelinesInConfigFile;
@@ -224,7 +224,7 @@ Status ModelManager::loadPipelinesConfig(rapidjson::Document& configJson) {
 Status ModelManager::loadModelsConfig(rapidjson::Document& configJson) {
     const auto itr = configJson.FindMember("model_config_list");
     if (itr == configJson.MemberEnd() || !itr->value.IsArray()) {
-        spdlog::error("Configuration file doesn't have models property.");
+        SPDLOG_LOGGER_ERROR(modelmanager_logger, "Configuration file doesn't have models property.");
         return StatusCode::JSON_INVALID;
     }
     std::set<std::string> modelsInConfigFile;
@@ -233,7 +233,7 @@ Status ModelManager::loadModelsConfig(rapidjson::Document& configJson) {
         ModelConfig& modelConfig = servedModelConfigs.emplace_back();
         auto status = modelConfig.parseNode(configs["config"]);
         if (!status.ok()) {
-            spdlog::error("Parsing model:{} config failed",
+            SPDLOG_LOGGER_ERROR(modelmanager_logger, "Parsing model:{} config failed",
                 modelConfig.getName());
             servedModelConfigs.pop_back();
             continue;
@@ -246,21 +246,21 @@ Status ModelManager::loadModelsConfig(rapidjson::Document& configJson) {
 }
 
 Status ModelManager::loadConfig(const std::string& jsonFilename) {
-    spdlog::info("Loading configuration from {}", jsonFilename);
+    SPDLOG_LOGGER_DEBUG(modelmanager_logger, "Loading configuration from {}", jsonFilename);
     std::ifstream ifs(jsonFilename.c_str());
     if (!ifs.good()) {
-        spdlog::error("File is invalid {}", jsonFilename);
+        SPDLOG_LOGGER_ERROR(modelmanager_logger, "File is invalid {}", jsonFilename);
         return StatusCode::FILE_INVALID;
     }
     rapidjson::Document configJson;
     rapidjson::IStreamWrapper isw(ifs);
     if (configJson.ParseStream(isw).HasParseError()) {
-        spdlog::error("Configuration file is not a valid JSON file.");
+        SPDLOG_LOGGER_ERROR(modelmanager_logger, "Configuration file is not a valid JSON file.");
         return StatusCode::JSON_INVALID;
     }
 
     if (validateJsonAgainstSchema(configJson, MODELS_CONFIG_SCHEMA) != StatusCode::OK) {
-        spdlog::error("Configuration file is not in valid configuration format");
+        SPDLOG_LOGGER_ERROR(modelmanager_logger, "Configuration file is not in valid configuration format");
         return StatusCode::JSON_INVALID;
     }
     configFilename = jsonFilename;
@@ -288,13 +288,13 @@ void ModelManager::retireModelsRemovedFromConfigFile(const std::set<std::string>
         try {
             models.at(modelName)->retireAllVersions();
         } catch (const std::out_of_range& e) {
-            spdlog::error("Unknown error occured when tried to retire all versions of model:{}", modelName);
+            SPDLOG_LOGGER_ERROR(modelmanager_logger, "Unknown error occured when tried to retire all versions of model:{}", modelName);
         }
     }
 }
 
 void ModelManager::watcher(std::future<void> exit) {
-    spdlog::info("Started config watcher thread");
+    SPDLOG_LOGGER_INFO(modelmanager_logger, "Started config watcher thread");
     int64_t lastTime;
     struct stat statTime;
     stat(configFilename.c_str(), &statTime);
@@ -310,7 +310,7 @@ void ModelManager::watcher(std::future<void> exit) {
             reloadModelWithVersions(config);
         }
     }
-    spdlog::info("Exited config watcher thread");
+    SPDLOG_LOGGER_ERROR(modelmanager_logger, "Exited config watcher thread");
 }
 
 void ModelManager::join() {
@@ -332,9 +332,9 @@ void ModelManager::getVersionsToChange(
     std::shared_ptr<model_versions_t>& versionsToRetireIn) {
     std::sort(requestedVersions.begin(), requestedVersions.end());
     model_versions_t registeredModelVersions;
-    spdlog::debug("Currently registered versions count:{}", modelVersionsInstances.size());
+    SPDLOG_DEBUG("Currently registered versions count:{}", modelVersionsInstances.size());
     for (const auto& [version, versionInstance] : modelVersionsInstances) {
-        spdlog::debug("version:{} state:{}", version, ovms::ModelVersionStateToString(versionInstance->getStatus().getState()));
+        SPDLOG_DEBUG("version:{} state:{}", version, ovms::ModelVersionStateToString(versionInstance->getStatus().getState()));
         registeredModelVersions.push_back(version);
     }
 
@@ -353,7 +353,7 @@ void ModelManager::getVersionsToChange(
                 versionsToReload->push_back(version);
             }
         } catch (std::out_of_range& e) {
-            spdlog::error("Data race occured during versions update. Could not found version. Details:{}", e.what());
+            SPDLOG_LOGGER_ERROR(modelmanager_logger, "Data race occured during versions update. Could not found version. Details:{}", e.what());
         }
     }
 
@@ -370,7 +370,7 @@ void ModelManager::getVersionsToChange(
                 return modelVersionsInstances.at(version)->getStatus().willEndUnloaded();
             });
     } catch (std::out_of_range& e) {
-        spdlog::error("Data race occured during versions update. Could not found version. Details:{}", e.what());
+        SPDLOG_LOGGER_ERROR(modelmanager_logger, "Data race occured during versions update. Could not found version. Details:{}", e.what());
     }
     versionsToRetire->resize(it - versionsToRetire->begin());
 
@@ -419,18 +419,18 @@ Status ModelManager::readAvailableVersions(std::shared_ptr<FileSystem>& fs, cons
     bool is_directory = false;
     auto status = fs->isDirectory(base, &is_directory);
     if (status != StatusCode::OK) {
-        spdlog::error("Couldn't check directory: {}", base);
+        SPDLOG_LOGGER_ERROR(modelmanager_logger, "Couldn't check directory: {}", base);
         return status;
     }
     if (!is_directory) {
-        spdlog::error("Directory does not exist: {}", base);
+        SPDLOG_LOGGER_ERROR(modelmanager_logger, "Directory does not exist: {}", base);
         return StatusCode::PATH_INVALID;
     }
 
     status = fs->getDirectorySubdirs(base, &dirs);
 
     if (status != StatusCode::OK) {
-        spdlog::error("Couldn't list directories in path: {}", base);
+        SPDLOG_LOGGER_ERROR(modelmanager_logger, "Couldn't list directories in path: {}", base);
         return status;
     }
 
@@ -438,19 +438,19 @@ Status ModelManager::readAvailableVersions(std::shared_ptr<FileSystem>& fs, cons
         try {
             ovms::model_version_t version = std::stoll(entry);
             if (version <= 0) {
-                spdlog::warn("Expected version directory name to be a number greater than 0. Got:{}", version);
+                SPDLOG_LOGGER_WARN(modelmanager_logger, "Expected version directory name to be a number greater than 0. Got:{}", version);
                 continue;
             }
             versions.push_back(version);
         } catch (const std::invalid_argument& e) {
-            spdlog::warn("Expected version directory name to be in number format. Got:{}", entry);
+            SPDLOG_LOGGER_WARN(modelmanager_logger, "Expected version directory name to be in number format. Got:{}", entry);
         } catch (const std::out_of_range& e) {
-            spdlog::error("Directory name is out of range for supported version format. Got:{}", entry);
+            SPDLOG_LOGGER_ERROR(modelmanager_logger, "Directory name is out of range for supported version format. Got:{}", entry);
         }
     }
 
     if (0 == versions.size()) {
-        spdlog::warn("No version found for model in path:{}", base);
+        SPDLOG_LOGGER_WARN(modelmanager_logger, "No version found for model in path:{}", base);
         return StatusCode::NO_MODEL_VERSION_AVAILABLE;
     }
 
@@ -462,14 +462,14 @@ StatusCode downloadModels(std::shared_ptr<FileSystem>& fs, ModelConfig& config, 
         return StatusCode::OK;
     }
     std::string localPath;
-    spdlog::info("Getting model from {}", config.getBasePath());
+    SPDLOG_LOGGER_INFO(modelmanager_logger, "Getting model from {}", config.getBasePath());
     auto sc = fs->downloadModelVersions(config.getBasePath(), &localPath, *versions);
     if (sc != StatusCode::OK) {
-        spdlog::error("Couldn't download model from {}", config.getBasePath());
+        SPDLOG_LOGGER_ERROR(modelmanager_logger,"Couldn't download model from {}", config.getBasePath());
         return sc;
     }
     config.setLocalPath(localPath);
-    spdlog::info("Model downloaded to {}", config.getLocalPath());
+    SPDLOG_LOGGER_INFO(modelmanager_logger, "Model downloaded to {}", config.getLocalPath());
 
     return StatusCode::OK;
 }
@@ -481,11 +481,11 @@ Status ModelManager::cleanupModelTmpFiles(ModelConfig& config) {
         LocalFileSystem lfs;
         lfstatus = lfs.deleteFileFolder(config.getLocalPath());
         if (lfstatus != StatusCode::OK) {
-            spdlog::error("Error occurred while deleting local copy of cloud model: {} reason {}",
+            SPDLOG_LOGGER_ERROR(modelmanager_logger, "Error occurred while deleting local copy of cloud model: {} reason {}",
                 config.getLocalPath(),
                 lfstatus);
         } else {
-            spdlog::info("Model removed from {}", config.getLocalPath());
+            SPDLOG_LOGGER_INFO(modelmanager_logger, "Model removed from {}", config.getLocalPath());
         }
     }
 
@@ -498,12 +498,12 @@ Status ModelManager::addModelVersions(std::shared_ptr<ovms::Model>& model, std::
         downloadModels(fs, config, versionsToStart);
         status = model->addVersions(versionsToStart, config);
         if (!status.ok()) {
-            spdlog::error("Error occurred while loading model: {} versions; error: {}",
+            SPDLOG_LOGGER_ERROR(modelmanager_logger, "Error occurred while loading model: {} versions; error: {}",
                 config.getName(),
                 status.string());
         }
     } catch (std::exception& e) {
-        spdlog::error("Exception occurred while loading model: {};", e.what());
+        SPDLOG_LOGGER_ERROR(modelmanager_logger, "Exception occurred while loading model: {};", e.what());
     }
 
     cleanupModelTmpFiles(config);
@@ -517,12 +517,12 @@ Status ModelManager::reloadModelVersions(std::shared_ptr<ovms::Model>& model, st
         downloadModels(fs, config, versionsToReload);
         auto status = model->reloadVersions(versionsToReload, config);
         if (!status.ok()) {
-            spdlog::error("Error occurred while reloading model: {}; versions; error: {}",
+            SPDLOG_LOGGER_ERROR(modelmanager_logger, "Error occurred while reloading model: {}; versions; error: {}",
                 config.getName(),
                 status.string());
         }
     } catch (std::exception& e) {
-        spdlog::error("Exception occurred while reloading model: {};", e.what());
+        SPDLOG_LOGGER_ERROR(modelmanager_logger, "Exception occurred while reloading model: {};", e.what());
     }
 
     cleanupModelTmpFiles(config);
@@ -558,7 +558,7 @@ Status ModelManager::reloadModelWithVersions(ModelConfig& config) {
 
     auto status = model->retireVersions(versionsToRetire);
     if (!status.ok()) {
-        spdlog::error("Error occurred while unloading model: {}; versions; error: {}",
+        SPDLOG_LOGGER_ERROR(modelmanager_logger, "Error occurred while unloading model: {}; versions; error: {}",
             config.getName(),
             status.string());
     }

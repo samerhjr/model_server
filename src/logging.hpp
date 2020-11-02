@@ -14,11 +14,15 @@
 // limitations under the License.
 //*****************************************************************************
 
-#include "environment.hpp"
+#include <spdlog/sinks/basic_file_sink.h>
+#include <spdlog/sinks/stdout_sinks.h>
+#include <spdlog/spdlog.h>
+#include <stdio.h>
 
+extern std::shared_ptr<spdlog::logger> gcs_logger;
+extern std::shared_ptr<spdlog::logger> azurestorage_logger;
+extern std::shared_ptr<spdlog::logger> s3_logger;
+extern std::shared_ptr<spdlog::logger> modelmanager_logger;
+extern std::shared_ptr<spdlog::logger> ensemble_logger;
 
-int main(int argc, char** argv) {
-    ::testing::InitGoogleTest(&argc, argv);
-    ::testing::AddGlobalTestEnvironment(new Environment);
-    return RUN_ALL_TESTS();
-}
+void configure_logger(const std::string log_level, const std::string log_path);

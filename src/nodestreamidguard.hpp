@@ -31,10 +31,10 @@ struct NodeStreamIdGuard {
     ~NodeStreamIdGuard() {
         if (!disarmed) {
             if (!streamId) {
-                spdlog::debug("Trying to disarm stream Id that is not needed anymore...");
+                SPDLOG_DEBUG("Trying to disarm stream Id that is not needed anymore...");
                 streamId = futureStreamId.get();
             }
-            spdlog::debug("Returning streamId:{}", streamId.value());
+            SPDLOG_DEBUG("Returning streamId:{}", streamId.value());
             inferRequestsQueue_.returnStream(streamId.value());
         }
     }
@@ -51,7 +51,7 @@ struct NodeStreamIdGuard {
     bool tryDisarm(const uint microseconds = 1) {
         if (std::future_status::ready == futureStreamId.wait_for(std::chrono::microseconds(microseconds))) {
             streamId = futureStreamId.get();
-            spdlog::debug("Returning streamId:", streamId.value());
+            SPDLOG_DEBUG("Returning streamId:", streamId.value());
             inferRequestsQueue_.returnStream(streamId.value());
             disarmed = true;
         }

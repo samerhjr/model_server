@@ -36,24 +36,24 @@ Status GetModelMetadataImpl::getModelStatus(
 
     auto model = manager.findModelByName(name);
     if (model == nullptr) {
-        spdlog::warn("model {} is  missing", name);
+        SPDLOG_WARN("model {} is  missing", name);
         return StatusCode::MODEL_NAME_MISSING;
     }
 
     std::shared_ptr<ModelInstance> instance = nullptr;
     if (request->model_spec().has_version() && request->model_spec().version().value() != 0) {
         ovms::model_version_t version = request->model_spec().version().value();
-        spdlog::debug("requested: name {}; version {}", name, version);
+        SPDLOG_DEBUG("requested: name {}; version {}", name, version);
         instance = model->getModelInstanceByVersion(version);
         if (instance == nullptr) {
-            spdlog::warn("model {}; version {} is missing", name, version);
+            SPDLOG_WARN("model {}; version {} is missing", name, version);
             return StatusCode::MODEL_VERSION_MISSING;
         }
     } else {
-        spdlog::debug("requested: name {}; default version", name);
+        SPDLOG_DEBUG("requested: name {}; default version", name);
         instance = model->getDefaultModelInstance();
         if (instance == nullptr) {
-            spdlog::warn("model {}; default version is missing", name);
+            SPDLOG_WARN("model {}; default version is missing", name);
             return StatusCode::MODEL_VERSION_MISSING;
         }
     }
@@ -135,7 +135,7 @@ Status GetModelMetadataImpl::serializeResponse2Json(const tensorflow::serving::G
     opts.always_print_primitive_fields = true;
     const auto& status = MessageToJsonString(*response, output, opts);
     if (!status.ok()) {
-        spdlog::error("Failed to convert proto to json. Error: ", status.ToString());
+        SPDLOG_ERROR("Failed to convert proto to json. Error: ", status.ToString());
         return StatusCode::JSON_SERIALIZATION_ERROR;
     }
     return StatusCode::OK;

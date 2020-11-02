@@ -216,7 +216,7 @@ StatusCode validateJsonAgainstSchema(rapidjson::Document& json, const char* sche
     rapidjson::Document schemaJson;
     rapidjson::ParseResult parsingSucceeded = schemaJson.Parse(schema);
     if (!parsingSucceeded) {
-        spdlog::error("JSON schema parse error: {}, at: {}", rapidjson::GetParseError_En(parsingSucceeded.Code()), parsingSucceeded.Offset());
+        SPDLOG_ERROR("JSON schema parse error: {}, at: {}", rapidjson::GetParseError_En(parsingSucceeded.Code()), parsingSucceeded.Offset());
         return StatusCode::JSON_INVALID;
     }
     rapidjson::SchemaDocument parsedSchema(schemaJson);
@@ -230,7 +230,7 @@ StatusCode validateJsonAgainstSchema(rapidjson::Document& json, const char* sche
         validator.GetInvalidDocumentPointer().StringifyUriFragment(sb);
         std::string key = sb.GetString();
 
-        spdlog::error("Given config is invalid according to schema: {}. Keyword: {} Key: {}", schema, keyword, key);
+        SPDLOG_ERROR("Given config is invalid according to schema: {}. Keyword: {} Key: {}", schema, keyword, key);
         return StatusCode::JSON_INVALID;
     }
 

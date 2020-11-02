@@ -71,7 +71,7 @@ grpc::Status ovms::PredictionServiceImpl::Predict(
     Timer timer;
     timer.start("total");
     using std::chrono::microseconds;
-    spdlog::debug("Processing gRPC request for model: {}; version: {}",
+    SPDLOG_DEBUG("Processing gRPC request for model: {}; version: {}",
         request->model_spec().name(),
         request->model_spec().version().value());
 
@@ -82,11 +82,11 @@ grpc::Status ovms::PredictionServiceImpl::Predict(
     auto status = getModelInstance(request, modelInstance, modelInstanceUnloadGuard);
 
     if (status == StatusCode::MODEL_NAME_MISSING) {
-        spdlog::info("Requested model: {} does not exist. Searching for pipeline with that name...", request->model_spec().name());
+        SPDLOG_INFO("Requested model: {} does not exist. Searching for pipeline with that name...", request->model_spec().name());
         status = getPipeline(request, response, pipelinePtr);
     }
     if (!status.ok()) {
-        spdlog::info("Getting modelInstance or pipeline failed. {}", status.string());
+        SPDLOG_INFO("Getting modelInstance or pipeline failed. {}", status.string());
         return status.grpc();
     }
 
@@ -101,7 +101,7 @@ grpc::Status ovms::PredictionServiceImpl::Predict(
     }
 
     timer.stop("total");
-    spdlog::debug("Total gRPC request processing time: {} ms", timer.elapsed<microseconds>("total") / 1000);
+    SPDLOG_DEBUG("Total gRPC request processing time: {} ms", timer.elapsed<microseconds>("total") / 1000);
     return grpc::Status::OK;
 }
 

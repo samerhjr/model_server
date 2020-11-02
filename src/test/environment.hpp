@@ -14,11 +14,19 @@
 // limitations under the License.
 //*****************************************************************************
 
-#include "environment.hpp"
+#define SPDLOG_ACTIVE_LEVEL SPDLOG_LEVEL_DEBUG
 
+#include <gtest/gtest.h>
 
-int main(int argc, char** argv) {
-    ::testing::InitGoogleTest(&argc, argv);
-    ::testing::AddGlobalTestEnvironment(new Environment);
-    return RUN_ALL_TESTS();
-}
+#include "../logging.hpp"
+
+class Environment : public testing::Environment {
+ public:
+  ~Environment() override {}
+
+  void SetUp() override {
+      configure_logger("INFO","");
+  }
+
+  void TearDown() override {}
+};

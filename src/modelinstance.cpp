@@ -46,7 +46,7 @@ const uint UNLOAD_AVAILABILITY_CHECKING_INTERVAL_MILLISECONDS = 10;
 Status ModelInstance::loadInputTensors(const ModelConfig& config, const DynamicModelParameter& parameter) {
     if (config.isShapeAnonymousFixed() && network->getInputsInfo().size() > 1) {
         Status status = StatusCode::ANONYMOUS_FIXED_SHAPE_NOT_ALLOWED;
-        spdlog::warn(status.string());
+        SPDLOG_WARN(status.string());
         return status;
     }
 
@@ -59,7 +59,7 @@ Status ModelInstance::loadInputTensors(const ModelConfig& config, const DynamicM
             continue;
         }
         if (networkInputs.count(shape.first) == 0) {
-            spdlog::warn("Config shape - {} not found in network", shape.first);
+            SPDLOG_WARN("Config shape - {} not found in network", shape.first);
             return StatusCode::CONFIG_SHAPE_IS_NOT_IN_NETWORK;
         }
     }
@@ -92,7 +92,7 @@ Status ModelInstance::loadInputTensors(const ModelConfig& config, const DynamicM
             shape = config.getShapes().at(ANONYMOUS_INPUT_NAME).shape;
         }
 
-        spdlog::debug("Network shape - {}; Final shape - {}", TensorInfo::shapeToString(networkShapes[name]), TensorInfo::shapeToString(shape));
+        SPDLOG_DEBUG("Network shape - {}; Final shape - {}", TensorInfo::shapeToString(networkShapes[name]), TensorInfo::shapeToString(shape));
 
         if (networkShapes[name] != shape) {
             reshapeRequired = true;
@@ -105,22 +105,22 @@ Status ModelInstance::loadInputTensors(const ModelConfig& config, const DynamicM
         this->inputsInfo[tensor->getMappedName()] = std::move(tensor);
         std::stringstream shape_stream;
         std::copy(shape.begin(), shape.end(), std::ostream_iterator<size_t>(shape_stream, " "));
-        spdlog::debug("Input name: {}; mapping_name: {}; shape: {}; precision: {}, layout:{}",
+        SPDLOG_DEBUG("Input name: {}; mapping_name: {}; shape: {}; precision: {}, layout:{}",
             name, mappingName, shape_stream.str(), precision_str, TensorInfo::getStringFromLayout(input->getLayout()));
     }
 
     // Update OV model shapes
     if (reshapeRequired) {
-        spdlog::debug("model: {}, version: {}; reshaping inputs", getName(), getVersion());
+        SPDLOG_DEBUG("model: {}, version: {}; reshaping inputs", getName(), getVersion());
         try {
             network->reshape(networkShapes);
         } catch (const InferenceEngine::details::InferenceEngineException& e) {
-            spdlog::warn("OV does not support reshaping model: {} with provided shape", getName());
-            spdlog::debug("Description: {}", e.what());
+            SPDLOG_WARN("OV does not support reshaping model: {} with provided shape", getName());
+            SPDLOG_DEBUG("Description: {}", e.what());
             return StatusCode::RESHAPE_ERROR;
         }
     } else {
-        spdlog::debug("model: {}, version: {}; reshaping inputs is not required", getName(), getVersion());
+        SPDLOG_DEBUG("model: {}, version: {}; reshaping inputs is not required", getName(), getVersion());
     }
 
     return StatusCode::OK;
@@ -141,7 +141,7 @@ void ModelInstance::loadOutputTensors(const ModelConfig& config) {
         this->outputsInfo[tensor->getMappedName()] = std::move(tensor);
         std::stringstream shape_stream;
         std::copy(shape.begin(), shape.end(), std::ostream_iterator<size_t>(shape_stream, " "));
-        spdlog::debug("Output name: {} ; mapping name: {}; shape: {} ; precision: {}, layout:{}",
+        SPDLOG_DEBUG("Output name: {} ; mapping name: {}; shape: {} ; precision: {}, layout:{}",
             name, mappingName, shape_stream.str(), precision_str, TensorInfo::getStringFromLayout(output->getLayout()));
     }
 }
@@ -161,7 +161,7 @@ std::string findFilePathWithExtension(const std::string& path, const std::string
     struct dirent* entry;
     DIR* dir = opendir(path.c_str());
     if (!dir) {
-        spdlog::warn("Failed to opendir: {}", path);
+        SPDLOG_WARN("Failed to opendir: {}", path);
         return std::string();
     }
 
@@ -199,7 +199,7 @@ uint ModelInstance::getNumOfParallelInferRequestsUnbounded(const ModelConfig& mo
     try {
         numberOfParallelInferRequests = execNetwork->GetMetric(key).as<unsigned int>();
     } catch (const details::InferenceEngineException& ex) {
-        spdlog::warn("Failed to query OPTIMAL_NUMBER_OF_INFER_REQUESTS with error {}. Using 1 nireq.", ex.what());
+        SPDLOG_WARN("Failed to query OPTIMAL_NUMBER_OF_INFER_REQUESTS with error {}. Using 1 nireq.", ex.what());
         numberOfParallelInferRequests = 1u;
     }
     return numberOfParallelInferRequests;
@@ -208,10 +208,10 @@ uint ModelInstance::getNumOfParallelInferRequestsUnbounded(const ModelConfig& mo
 uint ModelInstance::getNumOfParallelInferRequests(const ModelConfig& modelConfig) {
     uint nireq = getNumOfParallelInferRequestsUnbounded(modelConfig);
     if (nireq > MAX_NIREQ_COUNT) {
-        spdlog::warn("Invalid nireq because its value was too high:{}. Maximum value:{}", nireq, MAX_NIREQ_COUNT);
+        SPDLOG_WARN("Invalid nireq because its value was too high:{}. Maximum value:{}", nireq, MAX_NIREQ_COUNT);
         return 0;
     } else if (nireq < 1u) {
-        spdlog::warn("Ignored configured nireq because it has to be above 0 and was:{}. Set to 1", nireq);
+        SPDLOG_WARN("Ignored configured nireq because it has to be above 0 and was:{}. Set to 1", nireq);
         return 1u;
     }
     return nireq;
@@ -227,11 +227,11 @@ std::unique_ptr<InferenceEngine::CNNNetwork> ModelInstance::loadOVCNNNetworkPtr(
 
 Status ModelInstance::loadOVCNNNetwork() {
     auto& modelFile = modelFiles[0];
-    spdlog::debug("Try reading model file:{}", modelFile);
+    SPDLOG_DEBUG("Try reading model file:{}", modelFile);
     try {
         network = loadOVCNNNetworkPtr(modelFile);
     } catch (std::exception& e) {
-        spdlog::error("Error:{}; occurred during loading CNNNetwork for model:{} version:{}", e.what(), getName(), getVersion());
+        SPDLOG_ERROR("Error:{}; occurred during loading CNNNetwork for model:{} version:{}", e.what(), getName(), getVersion());
         return StatusCode::INTERNAL_ERROR;
     }
     return StatusCode::OK;
@@ -263,7 +263,7 @@ Status ModelInstance::loadOVExecutableNetwork(const ModelConfig& config) {
         loadExecutableNetworkPtr(pluginConfig);
     } catch (std::exception& e) {
         Status status = StatusCode::CANNOT_LOAD_NETWORK_INTO_TARGET_DEVICE;
-        spdlog::error("{}; error: {}; model:{}; version:{}; device:{}",
+        SPDLOG_ERROR("{}; error: {}; model:{}; version:{}; device:{}",
             status.string(),
             e.what(),
             getName(),
@@ -271,19 +271,19 @@ Status ModelInstance::loadOVExecutableNetwork(const ModelConfig& config) {
             config.getTargetDevice());
         return StatusCode::CANNOT_LOAD_NETWORK_INTO_TARGET_DEVICE;
     }
-    spdlog::info("Plugin config for device {}:", targetDevice);
+    SPDLOG_INFO("Plugin config for device {}:", targetDevice);
     for (const auto pair : pluginConfig) {
         const auto key = pair.first;
         const auto value = pair.second;
-        spdlog::info("{}: {}", key, value);
+        SPDLOG_INFO("{}: {}", key, value);
     }
     return StatusCode::OK;
 }
 
 Status ModelInstance::fetchModelFilepaths() {
-    spdlog::debug("Getting model files from path:{}", path);
+    SPDLOG_DEBUG("Getting model files from path:{}", path);
     if (!dirExists(path)) {
-        spdlog::error("Missing model directory {}", path);
+        SPDLOG_ERROR("Missing model directory {}", path);
         return StatusCode::PATH_INVALID;
     }
 
@@ -309,7 +309,7 @@ Status ModelInstance::fetchModelFilepaths() {
     }
 
     if (!found) {
-        spdlog::error("Could not find file for model:{} version:{} in path:{}", getName(), getVersion(), path);
+        SPDLOG_ERROR("Could not find file for model:{} version:{} in path:{}", getName(), getVersion(), path);
         return StatusCode::FILE_INVALID;
     }
 
@@ -322,7 +322,7 @@ Status ModelInstance::prepareInferenceRequestsQueue(const ModelConfig& config) {
         return Status(StatusCode::INVALID_NIREQ, "Exceeded allowed nireq value");
     }
     inferRequestsQueue = std::make_unique<OVInferRequestsQueue>(*execNetwork, numberOfParallelInferRequests);
-    spdlog::info("Loaded model {}; version: {}; batch size: {}; No of InferRequests: {}",
+    SPDLOG_INFO("Loaded model {}; version: {}; batch size: {}; No of InferRequests: {}",
         getName(),
         getVersion(),
         getBatchSize(),
@@ -377,7 +377,7 @@ Status ModelInstance::loadModelImpl(const ModelConfig& config, const DynamicMode
             return status;
         }
     } catch (const InferenceEngine::details::InferenceEngineException& e) {
-        spdlog::error("exception occurred while loading network: {}", e.what());
+        SPDLOG_ERROR("exception occurred while loading network: {}", e.what());
         this->status.setLoading(ModelVersionStatusErrorCode::UNKNOWN);
         return StatusCode::NETWORK_NOT_LOADED;
     }
@@ -388,12 +388,12 @@ Status ModelInstance::loadModelImpl(const ModelConfig& config, const DynamicMode
 
 Status ModelInstance::loadModel(const ModelConfig& config) {
     std::lock_guard<std::recursive_mutex> loadingLock(loadingMutex);
-    spdlog::info("Loading model: {}, version: {}, from path: {}, with target device: {} ...",
+    SPDLOG_INFO("Loading model: {}, version: {}, from path: {}, with target device: {} ...",
         config.getName(), config.getVersion(), config.getPath(), config.getTargetDevice());
     if (config.getBatchingMode() == AUTO) {
-        spdlog::info("Batch size mode for model {} is set to auto", config.getName());
+        SPDLOG_INFO("Batch size mode for model {} is set to auto", config.getName());
     } else if (config.anyShapeSetToAuto()) {
-        spdlog::info("Some inputs shapes for model {} are set to auto", config.getName());
+        SPDLOG_INFO("Some inputs shapes for model {} are set to auto", config.getName());
     }
     this->status = ModelVersionStatus(config.getName(), config.getVersion());
     this->status.setLoading();
@@ -407,7 +407,7 @@ Status ModelInstance::recoverFromReshapeError() {
     this->status.setLoading();
     if (!canUnloadInstance()) {
         this->status.setLoading(ModelVersionStatusErrorCode::UNKNOWN);
-        spdlog::error("Cannot recover model (name:{}; version:{}) from reshape error, inferences are still in progress", getName(), getVersion());
+        SPDLOG_ERROR("Cannot recover model (name:{}; version:{}) from reshape error, inferences are still in progress", getName(), getVersion());
         return Status(StatusCode::INTERNAL_ERROR, "cannot recover model");
     }
     auto status = this->loadInputTensors(this->config);
@@ -425,7 +425,7 @@ Status ModelInstance::reloadModel(const ModelConfig& config, const DynamicModelP
     std::lock_guard<std::recursive_mutex> loadingLock(loadingMutex);
     this->status.setLoading();
     while (!canUnloadInstance()) {
-        spdlog::info("Waiting to reload model: {} version: {}. Blocked by: {} inferences in progress.",
+        SPDLOG_INFO("Waiting to reload model: {} version: {}. Blocked by: {} inferences in progress.",
             getName(), getVersion(), predictRequestsHandlesCount);
         std::this_thread::sleep_for(std::chrono::milliseconds(UNLOAD_AVAILABILITY_CHECKING_INTERVAL_MILLISECONDS));
     }
@@ -440,11 +440,11 @@ Status ModelInstance::recoverFromReloadingError(const Status& status) {
         }
         return status;
     }
-    spdlog::warn("Failed to reload model:{} version:{} with error:{}. Reloading to previous configuration",
+    SPDLOG_WARN("Failed to reload model:{} version:{} with error:{}. Reloading to previous configuration",
         getName(), getVersion(), status.string());
     auto recoveryStatus = reloadModel(config);
     if (!recoveryStatus.ok()) {
-        spdlog::warn("Failed to reload model:{} version:{} to previous configuration with error:{}",
+        SPDLOG_WARN("Failed to reload model:{} version:{} to previous configuration with error:{}",
             getName(), getVersion(), recoveryStatus.string());
     }
     return status;
@@ -456,7 +456,7 @@ Status ModelInstance::reloadModel(size_t batchSize, std::map<std::string, shape_
     // block concurrent requests for reloading/unloading - assure that after reload predict request
     // will block further requests for reloading/unloading until inference is performed
     std::lock_guard<std::recursive_mutex> loadingLock(loadingMutex);
-    spdlog::info("Will reload model:{} version:{}", getName(), getVersion());
+    SPDLOG_INFO("Will reload model:{} version:{}", getName(), getVersion());
 
     DynamicModelParameter parameter;
     if (batchSize > 0) {
@@ -464,7 +464,7 @@ Status ModelInstance::reloadModel(size_t batchSize, std::map<std::string, shape_
     } else if (requestShapes.size() > 0) {
         parameter = DynamicModelParameter(requestShapes);
     } else {
-        spdlog::debug("Error: requested model:{} version:{} reload with no batchsize and shapes set.", getName(), getVersion());
+        SPDLOG_DEBUG("Error: requested model:{} version:{} reload with no batchsize and shapes set.", getName(), getVersion());
         return StatusCode::INTERNAL_ERROR;
     }
 
@@ -483,17 +483,17 @@ Status ModelInstance::waitForLoaded(const uint waitForModelLoadedTimeoutMillisec
     // assumption: model is already loaded for most of the calls
     modelInstanceUnloadGuard = std::make_unique<ModelInstanceUnloadGuard>(*this);
     if (getStatus().getState() == ModelVersionState::AVAILABLE) {
-        spdlog::debug("Model:{}, version:{} already loaded", getName(), getVersion());
+        SPDLOG_DEBUG("Model:{}, version:{} already loaded", getName(), getVersion());
         return StatusCode::OK;
     }
-    spdlog::info("Model:{} version:{} is still loading", getName(), getVersion());
+    SPDLOG_INFO("Model:{} version:{} is still loading", getName(), getVersion());
     modelInstanceUnloadGuard.reset();
 
     // wait several time since no guarantee that cv wakeup will be triggered before calling wait_for
     const uint waitLoadedTimestepMilliseconds = 100;
     const uint waitCheckpoints = waitForModelLoadedTimeoutMilliseconds / waitLoadedTimestepMilliseconds;
     uint waitCheckpointsCounter = waitCheckpoints;
-    spdlog::info("Waiting for loaded state for model:{} version:{} with timestep:{} timeout:{} check count:{}", getName(), getVersion(),
+    SPDLOG_INFO("Waiting for loaded state for model:{} version:{} with timestep:{} timeout:{} check count:{}", getName(), getVersion(),
         waitLoadedTimestepMilliseconds, waitForModelLoadedTimeoutMilliseconds, waitCheckpointsCounter);
     std::mutex cv_mtx;
     std::unique_lock<std::mutex> cv_lock(cv_mtx);
@@ -503,27 +503,27 @@ Status ModelInstance::waitForLoaded(const uint waitForModelLoadedTimeoutMillisec
                 [this]() {
                     return this->getStatus().getState() > ModelVersionState::LOADING;
                 })) {
-            spdlog::info("Waiting for model:{} version:{} loaded state for:{} time",
+            SPDLOG_INFO("Waiting for model:{} version:{} loaded state for:{} time",
                 getName(), getVersion(), waitCheckpoints - waitCheckpointsCounter);
         }
         modelInstanceUnloadGuard = std::make_unique<ModelInstanceUnloadGuard>(*this);
         if (getStatus().getState() == ModelVersionState::AVAILABLE) {
-            spdlog::info("Succesfully waited for model:{}, version:{}", getName(), getVersion());
+            SPDLOG_INFO("Succesfully waited for model:{}, version:{}", getName(), getVersion());
             return StatusCode::OK;
         }
         modelInstanceUnloadGuard.reset();
         if (ModelVersionState::AVAILABLE < getStatus().getState()) {
-            spdlog::info("Stopped waiting for model:{} version:{} since it is unloading.", getName(), getVersion());
+            SPDLOG_INFO("Stopped waiting for model:{} version:{} since it is unloading.", getName(), getVersion());
             return StatusCode::MODEL_VERSION_NOT_LOADED_ANYMORE;
         }
     }
-    spdlog::info("Waiting for loaded state reached timeout for model:{} version:{}",
+    SPDLOG_INFO("Waiting for loaded state reached timeout for model:{} version:{}",
         getName(), getVersion());
     if (getStatus().getState() > ModelVersionState::AVAILABLE) {
-        spdlog::warn("Waiting for model:{}, version:{} ended since it started unloading.", getName(), getVersion());
+        SPDLOG_DEBUG("Waiting for model:{}, version:{} ended since it started unloading.", getName(), getVersion());
         return StatusCode::MODEL_VERSION_NOT_LOADED_ANYMORE;
     } else {
-        spdlog::warn("Waiting for model:{}, version:{} ended due to timeout.", getName(), getVersion());
+        SPDLOG_DEBUG("Waiting for model:{}, version:{} ended due to timeout.", getName(), getVersion());
         return StatusCode::MODEL_VERSION_NOT_LOADED_YET;
     }
 }
@@ -532,7 +532,7 @@ void ModelInstance::unloadModel() {
     std::lock_guard<std::recursive_mutex> loadingLock(loadingMutex);
     this->status.setUnloading();
     while (!canUnloadInstance()) {
-        spdlog::info("Waiting to unload model:{} version:{}. Blocked by:{} inferences in progres.",
+        SPDLOG_DEBUG("Waiting to unload model:{} version:{}. Blocked by:{} inferences in progres.",
             getName(), getVersion(), predictRequestsHandlesCount);
         std::this_thread::sleep_for(std::chrono::milliseconds(UNLOAD_AVAILABILITY_CHECKING_INTERVAL_MILLISECONDS));
     }
@@ -554,7 +554,7 @@ const Status ModelInstance::validatePrecision(const ovms::TensorInfo& networkInp
         ss << "Expected: " << networkInput.getPrecisionAsString()
            << "; Actual: " << TensorInfo::getDataTypeAsString(requestInput.dtype());
         const std::string details = ss.str();
-        spdlog::debug("[Model:{} version:{}] Invalid precision - {}", getName(), getVersion(), details);
+        SPDLOG_DEBUG("[Model:{} version:{}] Invalid precision - {}", getName(), getVersion(), details);
         return Status(StatusCode::INVALID_PRECISION, details);
     }
     return StatusCode::OK;
@@ -570,7 +570,7 @@ const Status ModelInstance::validateNumberOfShapeDimensions(const ovms::TensorIn
         ss << "Expected: " << TensorInfo::shapeToString(shape)
            << "; Actual: " << TensorInfo::tensorShapeToString(requestInput.tensor_shape());
         const std::string details = ss.str();
-        spdlog::debug("[Model:{} version:{}] Invalid number of shape dimensions - {}", getName(), getVersion(), details);
+        SPDLOG_DEBUG("[Model:{} version:{}] Invalid number of shape dimensions - {}", getName(), getVersion(), details);
         return Status(StatusCode::INVALID_NO_OF_SHAPE_DIMENSIONS, details);
     }
     return StatusCode::OK;
@@ -629,7 +629,7 @@ const Status ModelInstance::validateTensorContentSize(const ovms::TensorInfo& ne
             std::stringstream ss;
             ss << "Expected: " << expectedValueCount << "; Actual: " << requestInput.int_val_size();
             const std::string details = ss.str();
-            spdlog::debug("[Model:{} version:{}] Invalid number of values in tensor proto container - {}", getName(), getVersion(), details);
+            SPDLOG_DEBUG("[Model:{} version:{}] Invalid number of values in tensor proto container - {}", getName(), getVersion(), details);
             return Status(StatusCode::INVALID_VALUE_COUNT, details);
         }
     } else if (requestInput.dtype() == tensorflow::DataType::DT_HALF) {
@@ -638,7 +638,7 @@ const Status ModelInstance::validateTensorContentSize(const ovms::TensorInfo& ne
             std::stringstream ss;
             ss << "Expected: " << expectedValueCount << "; Actual: " << requestInput.half_val_size();
             const std::string details = ss.str();
-            spdlog::debug("[Model:{} version:{}] Invalid number of values in tensor proto container - {}", getName(), getVersion(), details);
+            SPDLOG_DEBUG("[Model:{} version:{}] Invalid number of values in tensor proto container - {}", getName(), getVersion(), details);
             return Status(StatusCode::INVALID_VALUE_COUNT, details);
         }
     } else {
@@ -647,7 +647,7 @@ const Status ModelInstance::validateTensorContentSize(const ovms::TensorInfo& ne
             std::stringstream ss;
             ss << "Expected: " << expectedContentSize << " bytes; Actual: " << requestInput.tensor_content().size() << " bytes";
             const std::string details = ss.str();
-            spdlog::debug("[Model:{} version:{}] Invalid content size of tensor proto - {}", getName(), getVersion(), details);
+            SPDLOG_DEBUG("[Model:{} version:{}] Invalid content size of tensor proto - {}", getName(), getVersion(), details);
             return Status(StatusCode::INVALID_CONTENT_SIZE, details);
         }
     }
@@ -662,7 +662,7 @@ const Status ModelInstance::validate(const tensorflow::serving::PredictRequest* 
         std::stringstream ss;
         ss << "Expected: " << getInputsInfo().size() << "; Actual: " << request->inputs_size();
         const std::string details = ss.str();
-        spdlog::debug("[Model:{} version:{}] Invalid number of inputs - {}", getName(), getVersion(), details);
+        SPDLOG_DEBUG("[Model:{} version:{}] Invalid number of inputs - {}", getName(), getVersion(), details);
         return Status(StatusCode::INVALID_NO_OF_INPUTS, details);
     }
 
@@ -676,7 +676,7 @@ const Status ModelInstance::validate(const tensorflow::serving::PredictRequest* 
             std::stringstream ss;
             ss << "Required input: " << name;
             const std::string details = ss.str();
-            spdlog::debug("[Model:{} version:{}] Missing input with specific name - {}", getName(), getVersion(), details);
+            SPDLOG_DEBUG("[Model:{} version:{}] Missing input with specific name - {}", getName(), getVersion(), details);
             return Status(StatusCode::INVALID_MISSING_INPUT, details);
         }
 
@@ -699,7 +699,7 @@ const Status ModelInstance::validate(const tensorflow::serving::PredictRequest* 
                 std::stringstream ss;
                 ss << "Expected: " << getBatchSize() << "; Actual: " << requestInput.tensor_shape().dim(0).size();
                 const std::string details = ss.str();
-                spdlog::debug("[Model:{} version:{}] Invalid batch size - {}", getName(), getVersion(), details);
+                SPDLOG_DEBUG("[Model:{} version:{}] Invalid batch size - {}", getName(), getVersion(), details);
                 return Status(StatusCode::INVALID_BATCH_SIZE, details);
             }
         }
@@ -712,7 +712,7 @@ const Status ModelInstance::validate(const tensorflow::serving::PredictRequest* 
                 ss << "Expected: " << TensorInfo::shapeToString(networkInput->getShape())
                    << "; Actual: " << TensorInfo::tensorShapeToString(requestInput.tensor_shape());
                 const std::string details = ss.str();
-                spdlog::debug("[Model:{} version:{}] Invalid shape - {}", getName(), getVersion(), details);
+                SPDLOG_DEBUG("[Model:{} version:{}] Invalid shape - {}", getName(), getVersion(), details);
                 return Status(StatusCode::INVALID_SHAPE, details);
             }
         }
