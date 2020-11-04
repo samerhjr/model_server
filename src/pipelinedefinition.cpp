@@ -16,8 +16,11 @@
 //*****************************************************************************
 #include "pipelinedefinition.hpp"
 
+#include <chrono>
 #include <set>
+#include <thread>
 
+#include "pipelinedefinitionunloadguard.hpp"
 #include "prediction_service_utils.hpp"
 
 namespace ovms {
@@ -31,10 +34,51 @@ Status toNodeKind(const std::string& str, NodeKind& nodeKind) {
     return StatusCode::PIPELINE_NODE_WRONG_KIND_CONFIGURATION;
 }
 
+Status PipelineDefinition::validate(ModelManager& manager) {
+    struct ValidationResultNotifier {
+        ValidationResultNotifier() {}
+        ~ValidationResultNotifier() {
+            if (passed) {
+                // status.notifyValidationPassed();
+            } else {
+                // status.notifyValidationFailed();
+            }
+        }
+        bool passed = false;
+    };
+    ValidationResultNotifier notifier;
+    Status validationResult = validateNodes(manager);
+    if (validationResult != StatusCode::OK) {
+        return validationResult;
+    }
+
+    validationResult = validateForCycles();
+    if (validationResult != StatusCode::OK) {
+        return validationResult;
+    }
+    notifier.passed = true;
+    return StatusCode::OK;
+}
+
+Status PipelineDefinition::reload(ModelManager& manager, const std::vector<NodeInfo>& nodeInfos, const pipeline_connections_t& connections) {
+    resetSubscriptions(manager);
+    // this->status.notifyLoadInProgress();
+    while (requestsHandlesCounter > 0) {
+        std::this_thread::sleep_for(std::chrono::microseconds(1));
+    }
+
+    this->nodeInfos = nodeInfos;
+    this->connections = connections;
+    makeSubscriptions(manager);
+
+    return validate(manager);
+}
+
 Status PipelineDefinition::create(std::unique_ptr<Pipeline>& pipeline,
     const tensorflow::serving::PredictRequest* request,
     tensorflow::serving::PredictResponse* response,
-    ModelManager& manager) const {
+    ModelManager& manager) {
+    PipelineDefinitionUnloadGuard unloadGuard(*this);
     std::unordered_map<std::string, std::unique_ptr<Node>> nodes;
 
     EntryNode* entry = nullptr;
@@ -96,6 +140,15 @@ void PipelineDefinition::resetSubscriptions(ModelManager& manager) {
     subscriptions.clear();
 }
 
+static std::string createSubscriptionErrorMessage(const std::string& pipelineName, const NodeInfo& nodeInfo) {
+    std::stringstream ss;
+    ss << "Pipeline: " << pipelineName << " Failed to make subscription to model: " << nodeInfo.modelName;
+    if (nodeInfo.modelVersion) {
+        ss << " version: " << nodeInfo.modelVersion.value();
+    }
+    return ss.str();
+}
+
 void PipelineDefinition::makeSubscriptions(ModelManager& manager) {
     for (auto& node : nodeInfos) {
         if (node.kind == NodeKind::DL) {
@@ -104,28 +157,17 @@ void PipelineDefinition::makeSubscriptions(ModelManager& manager) {
             }
             auto model = manager.findModelByName(node.modelName);
             if (nullptr == model) {
-                std::stringstream ss;
-                ss << "Pipeline: " << getName() << "Failed to make subscription to model: " << node.modelName;
-                if (node.modelVersion) {
-                    ss << " version: " << node.modelVersion.value();
-                }
-                SPDLOG_WARN(ss.str());
+                SPDLOG_WARN(createSubscriptionErrorMessage(getName(), node));
                 continue;
             }
             if (node.modelVersion) {
                 auto modelInstance = model->getModelInstanceByVersion(node.modelVersion.value());
                 if (nullptr == modelInstance) {
-                    std::stringstream ss;
-                    ss << "Pipeline: " << getName() << "Failed to make subscription to model: " << node.modelName;
-                    if (node.modelVersion) {
-                        ss << " version: " << node.modelVersion.value();
-                    }
-                    SPDLOG_WARN(ss.str());
+                    SPDLOG_WARN(createSubscriptionErrorMessage(getName(), node));
                     continue;
                 }
                 modelInstance->subscribe(*this);
             } else {
-                auto model = manager.findModelByName(node.modelName);
                 model->subscribe(*this);
             }
             subscriptions.insert({node.modelName, node.modelVersion.value_or(0)});
@@ -163,6 +205,7 @@ Status PipelineDefinition::validateNode(ModelManager& manager, NodeInfo& node) {
         }
 
         nodeInputs = nodeModelInstance->getInputsInfo();
+        SPDLOG_ERROR("XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX  nodeInputs size:{}", nodeInputs.size());
     }
 
     for (auto& connection : connections[node.nodeName]) {
