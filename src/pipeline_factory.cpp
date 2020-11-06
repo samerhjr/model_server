@@ -31,7 +31,7 @@ Status PipelineFactory::createDefinition(const std::string& pipelineName,
 
     pipelineDefinition->makeSubscriptions(manager);
     Status validationResult = pipelineDefinition->validate(manager);
-    if (validationResult != StatusCode::OK) {
+    if (!validationResult.ok()) {
         SPDLOG_ERROR("Loading pipeline definition:{} failed:{}", pipelineName, validationResult.string());
         return validationResult;
     }

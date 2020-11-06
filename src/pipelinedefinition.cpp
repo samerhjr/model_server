@@ -48,16 +48,16 @@ Status PipelineDefinition::validate(ModelManager& manager) {
     };
     ValidationResultNotifier notifier;
     Status validationResult = validateNodes(manager);
-    if (validationResult != StatusCode::OK) {
+    if (!validationResult.ok()) {
         return validationResult;
     }
 
     validationResult = validateForCycles();
-    if (validationResult != StatusCode::OK) {
+    if (!validationResult.ok()) {
         return validationResult;
     }
     notifier.passed = true;
-    return StatusCode::OK;
+    return validationResult;
 }
 
 Status PipelineDefinition::reload(ModelManager& manager, const std::vector<NodeInfo>& nodeInfos, const pipeline_connections_t& connections) {
@@ -146,6 +146,7 @@ static std::string createSubscriptionErrorMessage(const std::string& pipelineNam
     if (nodeInfo.modelVersion) {
         ss << " version: " << nodeInfo.modelVersion.value();
     }
+    ss << " because it was missing";
     return ss.str();
 }
 
@@ -205,7 +206,6 @@ Status PipelineDefinition::validateNode(ModelManager& manager, NodeInfo& node) {
         }
 
         nodeInputs = nodeModelInstance->getInputsInfo();
-        SPDLOG_ERROR("XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX  nodeInputs size:{}", nodeInputs.size());
     }
 
     for (auto& connection : connections[node.nodeName]) {
@@ -343,7 +343,7 @@ Status PipelineDefinition::validateNodes(ModelManager& manager) {
             return StatusCode::PIPELINE_NODE_NAME_DUPLICATE;
         }
         auto result = validateNode(manager, node);
-        if (result != StatusCode::OK) {
+        if (!result.ok()) {
             return result;
         }
         if (node.kind == NodeKind::ENTRY) {
